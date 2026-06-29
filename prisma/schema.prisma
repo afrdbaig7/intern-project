@@ -1,0 +1,241 @@
+// Real-Time Collaborative Kanban with Autonomous AI Project Manager
+// Database schema. SQLite is used locally (persists across server restarts).
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Users & Team ────────────────────────────────────────────────
+model User {
+  id              String   @id @default(cuid())
+  email           String   @unique
+  name            String
+  avatarColor     String   @default("#6366f1")
+  githubUsername  String?
+  passwordHash    String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  boardMemberships BoardMember[]
+  assignedCards    Card[]        @relation("CardAssignee")
+  createdCards     Card[]        @relation("CardCreator")
+  comments         Comment[]
+  activities       Activity[]
+}
+
+model BoardMember {
+  id      String   @id @default(cuid())
+  boardId String
+  userId  String
+  role    String   @default("member") // "owner" | "member"
+  joinedAt DateTime @default(now())
+
+  board  Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  user   User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([boardId, userId])
+}
+
+// ─── Boards & Columns ────────────────────────────────────────────
+model Board {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  sprintStart   DateTime?
+  sprintEnd     DateTime?
+  template      String?  // "software-sprint" | "content-calendar" | "product-roadmap" | null
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  members  BoardMember[]
+  columns  Column[]
+  cards    Card[]
+  labels   Label[]
+  insights AIInsight[]
+  digests  Digest[]
+
+  @@index([updatedAt])
+}
+
+model Column {
+  id        String  @id @default(cuid())
+  boardId   String
+  name      String
+  order     Int
+  color     String  @default("#64748b")
+  wipLimit  Int?
+  isDone    Boolean @default(false)
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards Card[]
+
+  @@index([boardId])
+}
+
+// ─── Cards ───────────────────────────────────────────────────────
+model Card {
+  id                  String    @id @default(cuid())
+  boardId             String
+  columnId            String
+  title               String
+  description         String?
+  order               Int
+  complexity          Int?      // 1-5 story points (AI-suggested)
+  complexityAccepted  Boolean   @default(false)
+  dueDate             DateTime?
+  githubIssueNumber   Int?
+  githubRepo          String?   // "owner/repo"
+  sourceUrl           String?   // for chrome-extension clips
+  // optimistic concurrency control: version bumps on every write
+  version             Int       @default(1)
+  // last editor info for last-write-wins conflict notifications
+  lastEditedBy        String?
+  lastEditedAt        DateTime?
+
+  assigneeId String?
+  creatorId  String?
+
+  board   Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  column  Column  @relation(fields: [columnId], references: [id], onDelete: Cascade)
+  assignee User?  @relation("CardAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  creator  User?  @relation("CardCreator", fields: [creatorId], references: [id], onDelete: SetNull)
+
+  labels      CardLabel[]
+  comments    Comment[]
+  activities  Activity[]
+  history     CardHistory[]
+  dependenciesAsBlocker CardDependency[] @relation("BlockerCard")
+  dependenciesAsBlocked CardDependency[] @relation("BlockedCard")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  completedAt DateTime?
+
+  @@index([boardId])
+  @@index([columnId])
+  @@index([assigneeId])
+  @@index([boardId, githubRepo, githubIssueNumber])
+}
+
+model Label {
+  id      String @id @default(cuid())
+  boardId String
+  name    String
+  color   String @default("#64748b")
+
+  board Board      @relation(fields: [boardId], references: [id], onDelete: Cascade)
+  cards CardLabel[]
+
+  @@unique([boardId, name])
+}
+
+model CardLabel {
+  cardId  String
+  labelId String
+
+  card  Card  @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  label Label @relation(fields: [labelId], references: [id], onDelete: Cascade)
+
+  @@id([cardId, labelId])
+}
+
+// ─── Comments & Activity ─────────────────────────────────────────
+model Comment {
+  id        String   @id @default(cuid())
+  cardId    String
+  userId    String
+  text      String
+  createdAt DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+}
+
+model Activity {
+  id        String   @id @default(cuid())
+  cardId    String
+  boardId   String
+  userId    String
+  type      String   // "created" | "moved" | "updated" | "assigned" | "commented" | "complexity_set" | "completed"
+  summary   String
+  metadata  String?  // JSON string
+  createdAt DateTime @default(now())
+
+  card  Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user  User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, createdAt])
+  @@index([cardId])
+}
+
+// ─── Dependencies (bonus) ────────────────────────────────────────
+model CardDependency {
+  id           String @id @default(cuid())
+  blockerId    String
+  blockedId    String
+  createdAt    DateTime @default(now())
+
+  blocker Card @relation("BlockerCard", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked Card @relation("BlockedCard", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+}
+
+// ─── AI ──────────────────────────────────────────────────────────
+model AIInsight {
+  id        String   @id @default(cuid())
+  boardId   String
+  type      String   // "bottleneck" | "sprint_risk" | "complexity" | "assignment" | "digest"
+  severity  String   @default("info") // "info" | "warning" | "critical"
+  title     String
+  message   String
+  metadata  String?  // JSON string
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, createdAt])
+  @@index([boardId, type])
+}
+
+model Digest {
+  id        String   @id @default(cuid())
+  boardId   String
+  weekStart DateTime
+  weekEnd   DateTime
+  content   String   // JSON: { completed, velocityTrend, topBottleneck, ... }
+  createdAt DateTime @default(now())
+
+  board Board @relation(fields: [boardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId, weekStart])
+}
+
+// ─── Card history (training data for AI heuristics) ──────────────
+model CardHistory {
+  id                 String   @id @default(cuid())
+  cardId             String
+  boardId            String
+  action             String   // "created" | "moved" | "completed"
+  fromColumnId       String?
+  toColumnId         String?
+  assigneeId         String?
+  complexity         Int?
+  labelNames         String?  // comma-separated
+  descriptionLength  Int?
+  daysToComplete     Int?
+  createdAt          DateTime @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+
+  @@index([boardId])
+  @@index([cardId])
+}
