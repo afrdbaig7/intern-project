@@ -17,6 +17,7 @@ RUN bun install
 COPY . .
 
 # Generate Prisma client and build Next.js
+ENV DATABASE_URL="file:/app/db/custom.db"
 RUN bun run db:generate
 RUN bun run build
 
