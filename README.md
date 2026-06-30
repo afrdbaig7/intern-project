@@ -267,7 +267,8 @@ single-process budget (each user is one socket + one presence entry; no per-user
 ### Install & run
 ```bash
 bun install                    # install deps
-bun run db:push                # create SQLite schema
+cp .env.example .env           # create your local env file (uses relative SQLite path)
+bun run db:push                # create/sync SQLite schema
 bun run db:seed                # seed demo data (5 users, 2 boards, 22 cards)
 bun run socket                 # start the Socket.IO service (port 3003)
 bun run dev                    # start Next.js (port 3000) — in another terminal
