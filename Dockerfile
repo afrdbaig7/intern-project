@@ -25,12 +25,23 @@ RUN bun run build
 EXPOSE 8080
 ENV PORT=3000
 
-# Modify Caddyfile to listen on Railway's PORT instead of 80
-RUN sed -i 's/:80/:8080/g' Caddyfile
+# Fix ports: Next.js on 3000, Socket on 3003, Caddy on Railway's $PORT
+# Generate a new Caddyfile that correctly proxies Next.js and Socket.io
+RUN echo '{ \n\
+    http_port {$PORT} \n\
+} \n\
+:{$PORT} { \n\
+    handle /socket.io/* { \n\
+        reverse_proxy localhost:3003 \n\
+    } \n\
+    handle { \n\
+        reverse_proxy localhost:3000 \n\
+    } \n\
+}' > Caddyfile
 
 # Generate database schema (creates the SQLite file)
 RUN bun run db:push
 RUN bun run db:seed
 
-# Start Next.js, the socket service, and Caddy
-CMD bun run start & bun run socket & caddy run --config Caddyfile --adapter caddyfile
+# Railway injects $PORT. We force Next.js to 3000 so it doesn't steal $PORT from Caddy
+CMD PORT=3000 bun run start & bun run socket & caddy run --config Caddyfile --adapter caddyfile
