@@ -19,11 +19,6 @@ const AVATAR_COLORS = [
   "#ef4444", "#0ea5e9", "#22c55e", "#d946ef", "#f97316",
 ];
 
-// POST /api/auth/signup
-// Body: { name, email, password }
-// Creates a user with a bcrypt-hashed password, gives them a default board
-// (from the Software Sprint template) so they immediately see a populated
-// board, sets the auth cookie, and returns { user: UserDTO }.
 export async function POST(req: NextRequest) {
   const body = await parseBody<{ name?: string; email?: string; password?: string }>(req);
   const name = (body.name ?? "").trim();
@@ -40,7 +35,6 @@ export async function POST(req: NextRequest) {
     return err("Password must be at least 6 characters long.", 400);
   }
 
-  // Check for an existing account.
   const existing = await db.user.findUnique({ where: { email } });
   if (existing) {
     return err("An account with that email already exists. Try signing in instead.", 409);
@@ -49,14 +43,11 @@ export async function POST(req: NextRequest) {
   const passwordHash = hashPassword(password);
   const avatarColor = AVATAR_COLORS[Math.floor(Math.random() * AVATAR_COLORS.length)];
 
-  // Create the user + a default board from the Software Sprint template in one
-  // transaction so a failure rolls everything back.
   const user = await db.$transaction(async (tx) => {
     const newUser = await tx.user.create({
       data: { name, email, avatarColor, passwordHash },
     });
 
-    // Instantiate the Software Sprint template for the new user.
     const tpl = BOARD_TEMPLATES.find((t) => t.id === "software-sprint") ?? BOARD_TEMPLATES[0];
     const board = await tx.board.create({
       data: {
@@ -70,19 +61,16 @@ export async function POST(req: NextRequest) {
       data: { boardId: board.id, userId: newUser.id, role: "owner" },
     });
 
-    // Columns
     const columns = await Promise.all(
       tpl.columns.map((c, i) =>
         tx.column.create({ data: { boardId: board.id, name: c.name, color: c.color, order: i, isDone: c.isDone } })
       )
     );
 
-    // Labels
     await Promise.all(
       tpl.labels.map((l) => tx.label.create({ data: { boardId: board.id, name: l.name, color: l.color } }))
     );
 
-    // Sample cards (so the board isn't empty)
     if (tpl.sampleCards) {
       for (let i = 0; i < tpl.sampleCards.length; i++) {
         const sc = tpl.sampleCards[i];

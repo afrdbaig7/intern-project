@@ -7,10 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Re-export the same models as the root schema so the mini-service has its
-// own generated client. We keep this as a copy to avoid relative path
-// surprises; the source of truth remains ../../prisma/schema.prisma.
-
 model User {
   id              String   @id @default(cuid())
   email           String   @unique

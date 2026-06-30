@@ -1,7 +1,3 @@
-// Sprint risk assessment — pure heuristic, no external LLM.
-//
-// Computes current velocity (cards completed per day), compares it to the
-// remaining work, and projects whether the sprint deadline will be met.
 
 import { PrismaClient } from "@prisma/client";
 import type { SprintRiskResult } from "../types";
@@ -29,7 +25,6 @@ export async function assessSprintRisk(
     (board.sprintEnd.getTime() - now.getTime()) / DAY_MS
   );
 
-  // ── Cards remaining = cards NOT in done columns ──
   const nonDoneColumns = await db.column.findMany({
     where: { boardId, isDone: false },
     select: { id: true, name: true },
@@ -39,8 +34,6 @@ export async function assessSprintRisk(
     where: { boardId, columnId: { in: nonDoneColumnIds } },
   });
 
-  // ── Velocity: completed activities over the last 14 days ──
-  // If sprintStart exists, use days since sprintStart (capped at 14).
   const since14 = new Date(now.getTime() - VELOCITY_WINDOW_DAYS * DAY_MS);
   const completedActivities = await db.activity.count({
     where: {

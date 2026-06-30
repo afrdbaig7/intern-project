@@ -3,9 +3,6 @@
 import { io, type Socket } from "socket.io-client";
 import { SOCKET_EVENTS, type SocketUser, type PresenceUser } from "./types";
 
-// Singleton socket.io client. Connects to the Caddy gateway with
-// XTransformPort=3003 so the request is forwarded to the socket mini-service.
-// Path MUST be "/" (matches the server config).
 let socket: Socket | null = null;
 
 export function getSocket(): Socket {
@@ -19,20 +16,14 @@ export function getSocket(): Socket {
     reconnectionAttempts: Infinity,
   });
 
-  socket.on("connect", () => {
-    // console.debug("[socket] connected", socket?.id);
-  });
-  socket.on("disconnect", (reason) => {
-    // console.debug("[socket] disconnected", reason);
-  });
+  socket.on("connect", () => {});
+  socket.on("disconnect", () => {});
   socket.on("connect_error", (err) => {
     console.warn("[socket] connect error", err.message);
   });
 
   return socket;
 }
-
-// Typed emit/on helpers -----------------------------------------------
 
 export function joinBoard(boardId: string, user: SocketUser) {
   getSocket().emit(SOCKET_EVENTS.BOARD_JOIN, { boardId, user });
@@ -114,8 +105,6 @@ export function emitCursorMove(payload: {
 export function emitAIRun(boardId: string) {
   getSocket().emit(SOCKET_EVENTS.AI_RUN, { boardId });
 }
-
-// Listener helpers ----------------------------------------------------
 
 export type SocketListener = (payload: unknown) => void;
 

@@ -7,8 +7,6 @@ import { notFound, ok } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/cards/[id]/activity — return activities with user, newest first
-// (max 100).
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },

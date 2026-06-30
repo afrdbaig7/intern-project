@@ -1,8 +1,3 @@
-// Assignment suggestion — pure heuristic, no external LLM.
-//
-// For a given unassigned card, scores every board member based on their
-// past completion history with similar labels (Jaccard similarity), their
-// relevant label history, and their current in-progress load.
 
 import { PrismaClient } from "@prisma/client";
 import type { AssignmentSuggestion } from "../types";
@@ -47,20 +42,17 @@ export async function suggestAssignee(
 
   const cardLabelNames = card.labels.map((cl) => cl.label.name);
 
-  // ── Board members ──
   const memberships = await db.boardMember.findMany({
     where: { boardId },
     include: { user: { select: { id: true, name: true } } },
   });
   if (memberships.length === 0) return null;
 
-  // ── Past completions on this board (training data) ──
   const history = await db.cardHistory.findMany({
     where: { boardId, action: "completed" },
     select: { assigneeId: true, labelNames: true, daysToComplete: true },
   });
 
-  // ── Current in-progress cards per assignee (load penalty) ──
   const nonDoneColumns = await db.column.findMany({
     where: { boardId, isDone: false },
     select: { id: true },
@@ -84,14 +76,12 @@ export async function suggestAssignee(
     }
   }
 
-  // ── Score each member ──
   const scores: MemberScore[] = [];
   for (const m of memberships) {
     let score = 0;
     const reasons: string[] = [];
     const userHist = history.filter((h) => h.assigneeId === m.user.id);
 
-    // (a) +30 * (1 - daysToComplete/14) for each similar completed card.
     const similar = userHist.filter((h) => {
       const hLabels = (h.labelNames ?? "")
         .split(",")
@@ -116,7 +106,6 @@ export async function suggestAssignee(
       );
     }
 
-    // (b) +20 if they have any completed card sharing a label with this card.
     const cardLabelsLower = new Set(
       cardLabelNames.map((l) => l.toLowerCase())
     );
@@ -134,7 +123,6 @@ export async function suggestAssignee(
       );
     }
 
-    // (c) -10 per current in-progress card.
     const inProg = inProgressCount.get(m.user.id) ?? 0;
     if (inProg > 0) {
       const penalty = -10 * inProg;
@@ -150,7 +138,6 @@ export async function suggestAssignee(
     });
   }
 
-  // ── Pick the top scorer; bail if no one scores above 0 ──
   scores.sort((a, b) => b.score - a.score);
   const top = scores[0];
   if (!top || top.score <= 0) return null;

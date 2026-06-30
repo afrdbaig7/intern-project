@@ -42,7 +42,6 @@ interface BoardViewProps {
 }
 
 export function BoardView({ boardId }: BoardViewProps) {
-  // Real-time: join room + subscribe to all inbound card events.
   useBoardRealtime(boardId);
 
   const queryClient = useQueryClient();
@@ -84,7 +83,6 @@ export function BoardView({ boardId }: BoardViewProps) {
     return map;
   }, [boardQuery.data?.cards, columns]);
 
-  // ── DnD handlers ────────────────────────────────────────────────
   const onDragStart = (e: DragStartEvent) => {
     const card = e.active.data.current?.card as CardDTO | undefined;
     if (card) setActiveCard(card);
@@ -97,7 +95,6 @@ export function BoardView({ boardId }: BoardViewProps) {
     if (!activeCard) return;
 
     const fromColumnId = activeCard.columnId;
-    // Determine the target column id (over could be a card or the column itself).
     let toColumnId: string | null = null;
     if (over.data.current?.type === "column") {
       toColumnId = (over.data.current as { columnId: string }).columnId;
@@ -108,7 +105,6 @@ export function BoardView({ boardId }: BoardViewProps) {
 
     if (!toColumnId || toColumnId === fromColumnId) return;
 
-    // Optimistic cross-column move so the drag feels live.
     queryClient.setQueryData<{ cards: CardDTO[] } | undefined>(
       qk.fullBoard(boardId),
       (old) => {
@@ -131,14 +127,12 @@ export function BoardView({ boardId }: BoardViewProps) {
     const activeCard = active.data.current?.card as CardDTO | undefined;
     if (!activeCard || !user) return;
 
-    // Re-read the live card from cache (we may have optimistically moved it).
     const live = queryClient.getQueryData<{ cards: CardDTO[] } | undefined>(
       qk.fullBoard(boardId),
     );
     const current = live?.cards.find((c) => c.id === activeCard.id) ?? activeCard;
     const fromColumnId = activeCard.columnId;
 
-    // Resolve target column.
     let toColumnId: string = current.columnId;
     let targetIndex = 0;
 
@@ -156,14 +150,11 @@ export function BoardView({ boardId }: BoardViewProps) {
       targetIndex = idx === -1 ? 0 : idx;
     }
 
-    // Compute new ordered list of the destination column.
     const destCards = (live?.cards ?? [])
       .filter((c) => c.columnId === toColumnId && c.id !== activeCard.id)
       .sort((a, b) => a.order - b.order);
     destCards.splice(targetIndex, 0, { ...current, columnId: toColumnId });
 
-    // Optimistic reordering: assign new sequential orders within destination,
-    // and renumber source column if it changed.
     queryClient.setQueryData<{ cards: CardDTO[] } | undefined>(
       qk.fullBoard(boardId),
       (old) => {
@@ -193,7 +184,6 @@ export function BoardView({ boardId }: BoardViewProps) {
     }
   };
 
-  // ── Render ──────────────────────────────────────────────────────
   if (boardQuery.isLoading) {
     return <BoardSkeleton />;
   }

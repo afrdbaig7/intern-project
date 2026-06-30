@@ -1,5 +1,3 @@
-// Simple cookie-based auth. No NextAuth — just a `kb_user=<userId>` httpOnly
-// cookie that we read on every request. Passwords are hashed with bcrypt.
 
 import type { NextRequest } from "next/server";
 import bcrypt from "bcryptjs";
@@ -19,7 +17,6 @@ export function hashPassword(plain: string): string {
 
 /** Verify a plaintext password against a stored bcrypt hash. */
 export function verifyPassword(plain: string, hash: string): boolean {
-  // Guard against legacy / empty hashes.
   if (!hash || !hash.startsWith("$2")) return false;
   try {
     return bcrypt.compareSync(plain, hash);

@@ -30,7 +30,6 @@ export function CursorsLayer({ active }: { active: boolean }) {
   const boardId = useAppStore((s) => s.currentBoardId);
   const [cursors, setCursors] = React.useState<Map<string, RemoteCursor>>(new Map());
 
-  // Subscribe to remote cursor updates.
   React.useEffect(() => {
     if (!active) {
       setCursors(new Map());
@@ -50,7 +49,6 @@ export function CursorsLayer({ active }: { active: boolean }) {
         name: "User",
         avatarColor: "#10b981",
       };
-      // Skip our own cursor.
       if (user && u.id === user.id) return;
       setCursors((prev) => {
         const next = new Map(prev);
@@ -71,7 +69,6 @@ export function CursorsLayer({ active }: { active: boolean }) {
     };
   }, [active, user]);
 
-  // Periodically prune stale cursors (no update in 3s).
   React.useEffect(() => {
     if (!active) return;
     const interval = setInterval(() => {
@@ -92,7 +89,6 @@ export function CursorsLayer({ active }: { active: boolean }) {
     return () => clearInterval(interval);
   }, [active]);
 
-  // Emit local mouse moves (throttled).
   React.useEffect(() => {
     if (!active || !user || !boardId) return;
     let lastEmit = 0;

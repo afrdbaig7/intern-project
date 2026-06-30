@@ -1,7 +1,3 @@
-// Weekly digest generation — pure heuristic, no external LLM.
-//
-// Summarises the last 7 days of activity: completions, creations, daily
-// velocity trend, top bottleneck column, and per-assignee completion counts.
 
 import { PrismaClient } from "@prisma/client";
 import type { DigestContent } from "../types";
@@ -28,7 +24,6 @@ export async function generateDigest(
   const weekStart = midnight(new Date(now.getTime() - WINDOW_DAYS * DAY_MS));
   const weekEnd = now;
 
-  // Pull all cards (with assignees) in one query — easier than many counts.
   const cards = await db.card.findMany({
     where: { boardId },
     select: {
@@ -50,7 +45,6 @@ export async function generateDigest(
     (c) => c.createdAt >= weekStart && c.createdAt <= weekEnd
   ).length;
 
-  // ── Velocity trend: last 7 days, one bucket per day ──
   const velocityTrend: { date: string; completed: number }[] = [];
   for (let i = WINDOW_DAYS - 1; i >= 0; i--) {
     const dayStart = midnight(new Date(now.getTime() - i * DAY_MS));
@@ -65,7 +59,6 @@ export async function generateDigest(
     });
   }
 
-  // ── Top bottleneck ──
   const bottlenecks = await detectBottlenecks(db, boardId);
   const topBottleneck =
     bottlenecks.length > 0
@@ -75,7 +68,6 @@ export async function generateDigest(
         }
       : null;
 
-  // ── By assignee — completed this week, sorted desc ──
   const byAssigneeMap = new Map<
     string,
     { userId: string; name: string; completed: number }
@@ -102,7 +94,6 @@ export async function generateDigest(
     (a, b) => b.completed - a.completed
   );
 
-  // ── Plain-English summary ──
   const velocityPerDay = totalCompleted / WINDOW_DAYS;
   const bottleneckPart = topBottleneck
     ? `The top bottleneck was the ${topBottleneck.column} column.`

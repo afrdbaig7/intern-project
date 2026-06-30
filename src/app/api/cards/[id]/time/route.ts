@@ -42,7 +42,6 @@ async function buildResponse(cardId: string): Promise<CardTimeStateDTO> {
   return buildCardTimeState(card, entries);
 }
 
-// GET /api/cards/[id]/time
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -53,7 +52,6 @@ export async function GET(
   return ok(await buildResponse(id));
 }
 
-// POST /api/cards/[id]/time — start a timer for { userId }.
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -74,7 +72,6 @@ export async function POST(
   });
   if (!card) return notFound("Card not found");
 
-  // Prevent duplicate open entries for this card+user.
   const openForUser = await db.timeEntry.findFirst({
     where: { cardId: id, userId, endedAt: null },
   });
@@ -88,8 +85,6 @@ export async function POST(
     await tx.timeEntry.create({
       data: { cardId: id, userId, startedAt: now, endedAt: null },
     });
-    // Mark the card's active timer only if none is set yet — this lets the
-    // first starter's clock drive the board-wide "running" indicator.
     await tx.card.update({
       where: { id },
       data: {
@@ -121,7 +116,6 @@ export async function POST(
   return ok(await buildResponse(id));
 }
 
-// PATCH /api/cards/[id]/time — stop the running timer for { userId }.
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -155,10 +149,6 @@ export async function PATCH(
     Math.floor((now.getTime() - openEntry.startedAt.getTime()) / 1000),
   );
 
-  // Determine whether THIS entry's start time matches the card's active
-  // timerStartedAt — if so, we clear the card-level marker. (If multiple
-  // users somehow have open entries — defensive — we only clear when the
-  // card's marker corresponds to this entry.)
   const wasActiveTimer =
     card.timerStartedAt &&
     card.timerStartedAt.getTime() === openEntry.startedAt.getTime();

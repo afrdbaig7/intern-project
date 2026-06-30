@@ -38,9 +38,6 @@ export function useBoardRealtime(boardId: string | null) {
   const user = useAppStore((s) => s.user);
   const selectCard = useAppStore((s) => s.selectCard);
 
-  // Keep the latest values in refs so the (single) subscribe effect closure
-  // stays fresh without re-subscribing on every boardId/user change. Updated
-  // in effects (not during render) per the react-hooks/refs rule.
   const boardIdRef = React.useRef(boardId);
   React.useEffect(() => {
     boardIdRef.current = boardId;
@@ -50,7 +47,6 @@ export function useBoardRealtime(boardId: string | null) {
     userRef.current = user;
   }, [user]);
 
-  // Join / leave the board room.
   React.useEffect(() => {
     if (!boardId) return;
     const u = userRef.current;
@@ -62,7 +58,6 @@ export function useBoardRealtime(boardId: string | null) {
     };
   }, [boardId]);
 
-  // Subscribe to all inbound socket events for the lifetime of the hook.
   React.useEffect(() => {
     const keyFor = (id: string | null) => (id ? qk.fullBoard(id) : null);
 
@@ -84,7 +79,6 @@ export function useBoardRealtime(boardId: string | null) {
       if (!bid || !card?.id) return;
       updateBoardCards(bid, (cards) => {
         if (cards.some((c) => c.id === card.id)) return cards;
-        // Insert preserving order within the destination column.
         const next = [...cards, card];
         next.sort((a, b) => {
           if (a.columnId === b.columnId) return a.order - b.order;
@@ -101,7 +95,6 @@ export function useBoardRealtime(boardId: string | null) {
       updateBoardCards(bid, (cards) =>
         cards.map((c) => (c.id === card.id ? { ...c, ...card } : c)),
       );
-      // Also refresh the standalone card query (used by the modal).
       queryClient.setQueryData<CardDTO | undefined>(qk.card(card.id), (old) =>
         old ? { ...old, ...card } : old,
       );

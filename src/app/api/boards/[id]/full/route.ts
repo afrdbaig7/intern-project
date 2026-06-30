@@ -10,9 +10,6 @@ import { notFound, ok } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/boards/[id]/full — return BoardDetailDTO
-// (board + members + columns + labels + all cards with assignee/creator/labels).
-// Single query with includes — no N+1.
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },

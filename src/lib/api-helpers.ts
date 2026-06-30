@@ -1,13 +1,9 @@
-// Shared helpers for App Router API routes: response shaping, body parsing,
-// auth gating, and the bridge into the Socket.IO mini-service (internal
-// broadcast + on-demand AI run endpoints).
 
 import { NextResponse, type NextRequest } from "next/server";
 
 import { getCurrentUser } from "./auth";
 import type { UserDTO } from "./types";
 
-// ─── Response helpers ──────────────────────────────────────────────────────
 export function ok<T>(data: T, init?: ResponseInit): NextResponse<T> {
   return NextResponse.json(data, init);
 }
@@ -32,7 +28,6 @@ export async function parseBody<T = Record<string, unknown>>(
   }
 }
 
-// ─── Auth gate ─────────────────────────────────────────────────────────────
 /**
  * Returns the current user or THROWS a NextResponse (status 401). Callers
  * should wrap in try/catch and return the thrown value verbatim.
@@ -67,7 +62,6 @@ export async function getUser(
   }
 }
 
-// ─── Socket.IO mini-service bridge ─────────────────────────────────────────
 const SOCKET_SERVICE_BASE = "http://localhost:3003";
 
 /**
@@ -85,7 +79,6 @@ export async function broadcast(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ boardId, event, payload }),
-      // Don't hang the request forever if the socket service is wedged.
       signal: AbortSignal.timeout(3000),
     });
   } catch (e) {
@@ -116,7 +109,6 @@ export async function triggerAI(boardId: string): Promise<void> {
   }
 }
 
-// ─── Misc utilities ────────────────────────────────────────────────────────
 export function notFound(message = "Not found"): NextResponse {
   return err(message, 404);
 }

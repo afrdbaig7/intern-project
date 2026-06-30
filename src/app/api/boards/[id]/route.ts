@@ -7,8 +7,6 @@ import { err, getUser, notFound, ok, parseBody } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/boards/[id] — return BoardDTO (board + members + columns + labels,
-// no cards).
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -22,8 +20,6 @@ export async function GET(
   return ok(toBoardDTO(board));
 }
 
-// PATCH /api/boards/[id] — update board fields.
-// Body: { name?, description?, sprintStart?, sprintEnd? }
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -57,10 +53,8 @@ export async function PATCH(
     data.sprintEnd = body.sprintEnd ? new Date(body.sprintEnd) : null;
   }
 
-  // Touch updatedAt even if no fields changed.
   data.updatedAt = new Date();
 
-  // Use the user to silence unused warnings and to log the actor in future.
   void user;
 
   const updated = await db.board.update({
@@ -71,7 +65,6 @@ export async function PATCH(
   return ok(toBoardDTO(updated));
 }
 
-// DELETE /api/boards/[id] — cascade delete.
 export async function DELETE(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },

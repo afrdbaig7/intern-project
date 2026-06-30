@@ -1,15 +1,3 @@
-// Bottleneck detection — pure heuristic, no external LLM.
-//
-// Two complementary signals are emitted:
-//   1. COLUMN bottlenecks — a column where cards arrive but don't leave
-//      (arrived >= 3 AND arrived/left > 2.5 over the last 7 days).
-//   2. DEPENDENCY bottlenecks (bonus) — a single card that is NOT in a done
-//      column but is blocking ≥ 2 downstream tasks. Severity escalates:
-//      2-3 blocked => warning, ≥ 4 blocked => critical. Completing the card
-//      would unblock the chain.
-//
-// Both are returned to the caller as BottleneckResult[] so they can be
-// persisted as AIInsight rows with type "bottleneck".
 
 import { PrismaClient } from "@prisma/client";
 import type { BottleneckResult } from "../types";
@@ -20,7 +8,6 @@ const MIN_ARRIVED = 3;
 const RATIO_THRESHOLD = 2.5;
 const CRITICAL_RATIO = 4;
 
-// Dependency bottleneck thresholds (bonus).
 const DEP_WARNING_THRESHOLD = 2; // blocks >= 2 → warning
 const DEP_CRITICAL_THRESHOLD = 4; // blocks >= 4 → critical
 
@@ -47,7 +34,6 @@ export async function detectBottlenecks(
 ): Promise<BottleneckResult[]> {
   const since = new Date(Date.now() - LOOKBACK_DAYS * DAY_MS);
 
-  // ── Load "moved" activities on this board over the lookback window ──
   const movedActivities = await db.activity.findMany({
     where: {
       boardId,
@@ -57,14 +43,12 @@ export async function detectBottlenecks(
     select: { metadata: true },
   });
 
-  // ── All columns on the board (we need names + ids) ──
   const columns = await db.column.findMany({
     where: { boardId },
     orderBy: { order: "asc" },
   });
   if (columns.length === 0) return [];
 
-  // Tally arrived/left per column by parsing each moved activity's metadata.
   const stats = new Map<string, { arrived: number; left: number }>();
   for (const col of columns) stats.set(col.id, { arrived: 0, left: 0 });
 
@@ -76,7 +60,6 @@ export async function detectBottlenecks(
     if (from && stats.has(from)) stats.get(from)!.left++;
   }
 
-  // ── Pull every card currently on the board, with assignee + labels ──
   const cards = await db.card.findMany({
     where: { boardId },
     include: {
@@ -91,8 +74,6 @@ export async function detectBottlenecks(
     const s = stats.get(col.id)!;
     if (s.arrived < MIN_ARRIVED) continue;
 
-    // Guard divide-by-zero: treat left=0 as an infinite ratio (arrived count
-    // is already >= MIN_ARRIVED here, so it's clearly a bottleneck).
     const ratio = s.left === 0 ? Number.POSITIVE_INFINITY : s.arrived / s.left;
     if (ratio <= RATIO_THRESHOLD) continue;
 
@@ -102,7 +83,6 @@ export async function detectBottlenecks(
     let likelyCause =
       "Cards are accumulating faster than they're being completed";
 
-    // Check assignee overload first (>50% of cards owned by one person).
     const assigneeCounts = new Map<string, number>();
     for (const c of colCards) {
       if (c.assigneeId) {
@@ -125,7 +105,6 @@ export async function detectBottlenecks(
       const name = ownerCard?.assignee?.name ?? "Unknown";
       likelyCause = `Assignee ${name} is overloaded with ${topAssignee[1]} cards in this column`;
     } else {
-      // Then check label frequency (>40% of cards share a label).
       const labelCounts = new Map<string, number>();
       for (const c of colCards) {
         for (const cl of c.labels) {
@@ -153,23 +132,16 @@ export async function detectBottlenecks(
     });
   }
 
-  // ── Dependency-chain bottlenecks (bonus) ──────────────────────────
-  // For every non-done card, count how many downstream cards it blocks.
-  // Cards blocking ≥ 2 others are surfaced as bottleneck insights so the
-  // team can prioritise unblocking the chain.
   try {
     const doneColIds = new Set(
       columns.filter((c) => c.isDone).map((c) => c.id),
     );
 
-    // Load every dependency edge on this board (filter via the blocker's
-    // boardId so we don't pull edges from other boards).
     const edges = await db.cardDependency.findMany({
       where: { blocker: { boardId } },
       select: { blockerId: true, blockedId: true },
     });
 
-    // blockerId → count of cards it blocks
     const blockingCount = new Map<string, number>();
     for (const e of edges) {
       blockingCount.set(e.blockerId, (blockingCount.get(e.blockerId) ?? 0) + 1);
@@ -178,14 +150,12 @@ export async function detectBottlenecks(
       return results.sort((a, b) => b.ratio - a.ratio);
     }
 
-    // Build a quick lookup so we can resolve columnId/title per blocker.
     const cardById = new Map(cards.map((c) => [c.id, c]));
 
     for (const [blockerId, count] of blockingCount) {
       if (count < DEP_WARNING_THRESHOLD) continue;
       const blocker = cardById.get(blockerId);
       if (!blocker) continue;
-      // Skip cards already in a done column.
       if (doneColIds.has(blocker.columnId)) continue;
 
       const blockerCol = columns.find((c) => c.id === blocker.columnId);
@@ -199,9 +169,6 @@ export async function detectBottlenecks(
         columnName: colName,
         cardId: blocker.id,
         cardTitle: blocker.title,
-        // Reuse the arrived/left fields to convey downstream impact. `arrived`
-        // = downstream cards blocked; `left` = 0 (they can't proceed until
-        // this one is done). `ratio` = arrived/left → ∞, capped to `count`.
         arrived: count,
         left: 0,
         ratio: count,

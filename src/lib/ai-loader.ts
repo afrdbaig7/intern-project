@@ -1,19 +1,3 @@
-// Dynamic-import wrapper for the AI engine module (Task 2-b).
-//
-// We can't statically depend on @/lib/ai at module-eval time because that
-// module may not exist yet while this code is being written — a missing
-// module would break the entire API surface. Instead we try to import it at
-// call time and return null if it isn't available. Callers must handle null
-// gracefully.
-//
-// The AI module (src/lib/ai/index.ts) exports:
-//   - inferComplexity(db, boardId, { title, description, labelNames }) → ComplexityResult
-//   - inferComplexityForCard(db, cardId) → ComplexityResult
-//   - runAIAnalysis(db, boardId, { onInsight }) → { insights, digest }
-//   - detectBottlenecks, assessSprintRisk, suggestAssignee, generateDigest
-//
-// We probe a few likely names defensively in case the export surface shifts.
-
 import type { PrismaClient } from "@prisma/client";
 
 export interface ComplexitySuggestion {
@@ -63,7 +47,6 @@ export async function inferComplexityForCard(
   const ai = await loadAI();
   if (!ai) return null;
 
-  // Preferred: inferComplexityForCard(db, cardId)
   const forCard = ai.inferComplexityForCard as InferComplexityForCardFn | undefined;
   if (typeof forCard === "function") {
     try {
@@ -135,10 +118,6 @@ function normalizeSuggestion(
   return null;
 }
 
-// Kept for backwards-compat with the original task spec which referenced
-// `inferComplexity(card)` — delegates to inferComplexityFromFields with a
-// best-effort lookup. Prefer inferComplexityForCard / inferComplexityFromFields
-// in new code.
 export async function inferComplexity(
   card: {
     title: string;

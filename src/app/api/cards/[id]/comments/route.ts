@@ -7,7 +7,6 @@ import { notFound, ok } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/cards/[id]/comments — return comments with user, newest first.
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },

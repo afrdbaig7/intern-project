@@ -1,14 +1,3 @@
-// Kanban Socket.IO Mini-Service
-//
-// Owns all real-time card/comment MUTATIONS for the collaborative Kanban app.
-// The Next.js API handles reads + auth + GitHub import; after writing it calls
-// this service's internal HTTP endpoints to fan out broadcasts.
-//
-// Bootstrap mirrors examples/websocket/server.ts exactly:
-//   - path: "/"  (used by Caddy)
-//   - cors: "*"
-//   - port 3003
-//   - graceful SIGTERM/SIGINT
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'http'
 import { PrismaClient, type Card } from '@prisma/client'
@@ -31,34 +20,15 @@ import {
 
 const db = new PrismaClient()
 
-// ─── In-memory state ────────────────────────────────────────────────
-// boardId -> socketId -> PresenceUser
 const presence = new Map<string, Map<string, PresenceUser>>()
-// boardId -> cardId -> userId -> { user, last (ms ts) }
 const typing = new Map<string, Map<string, Map<string, { user: SocketUser; last: number }>>>()
-// boardId -> socketId -> { x, y, userId }
 const cursors = new Map<string, Map<string, { x: number; y: number; userId: string }>>()
-// socketId -> set of boardIds (for disconnect cleanup)
 const socketBoards = new Map<string, Set<string>>()
-// socketId -> last known SocketUser (for activity logging on disconnect)
 const socketUserMap = new Map<string, SocketUser>()
-// socketId -> last cursor broadcast ts (ms) for 50ms throttle
 const lastCursorBroadcast = new Map<string, number>()
 
-// ─── HTTP server + Socket.IO bootstrap ──────────────────────────────
-// With `path: '/'` (required by Caddy), engine.io's `attach()` REMOVES all
-// pre-existing 'request' listeners and installs its own. That listener's
-// path check (`path === req.url.slice(0, path.length)` with path '/') is
-// always true, so engine.io intercepts every HTTP request and returns 400
-// "Transport unknown" for non-engine.io URLs.
-//
-// To serve our own internal HTTP routes we let engine.io attach, then
-// RE-WRAP the request listeners: capture engine.io's listener, replace it
-// with our own that short-circuits /, /internal/broadcast, /internal/ai-run
-// and otherwise delegates to engine.io.
 const httpServer = createServer()
 const io = new Server(httpServer, {
-  // DO NOT change the path, it is used by Caddy to forward the request to the correct port
   path: '/',
   cors: {
     origin: '*',
@@ -68,8 +38,6 @@ const io = new Server(httpServer, {
   pingInterval: 25000,
 })
 
-// Capture engine.io's request listener(s) and re-wrap so our internal HTTP
-// routes take precedence.
 const engineRequestListeners = httpServer.listeners('request').slice(0)
 httpServer.removeAllListeners('request')
 httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
@@ -79,7 +47,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
     const pathname = qIdx >= 0 ? url.slice(0, qIdx) : url
     const hasEIO = qIdx >= 0 && url.slice(qIdx + 1).includes('EIO=')
 
-    // Health check: bare GET / with no socket.io query
     if (req.method === 'GET' && pathname === '/' && !hasEIO) {
       res.writeHead(200, { 'Content-Type': 'application/json' })
       res.end(
@@ -91,7 +58,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
       return
     }
 
-    // POST /internal/broadcast  { boardId, event, payload }
     if (req.method === 'POST' && pathname === '/internal/broadcast') {
       const body = await readBody(req)
       let parsed: { boardId?: string; event?: string; payload?: unknown }
@@ -115,7 +81,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
       return
     }
 
-    // POST /internal/ai-run  { boardId }
     if (req.method === 'POST' && pathname === '/internal/ai-run') {
       const body = await readBody(req)
       let parsed: { boardId?: string }
@@ -132,7 +97,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
         res.end(JSON.stringify({ ok: false, error: 'boardId required' }))
         return
       }
-      // Fire-and-forget; respond immediately so the caller isn't blocked
       runBoardAI(boardId).catch((e) =>
         console.error(`[socket:error] /internal/ai-run failed: ${String(e)}`),
       )
@@ -142,7 +106,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
       return
     }
 
-    // Not our route — delegate to engine.io's listener(s).
     for (const l of engineRequestListeners) {
       l.call(httpServer, req, res)
     }
@@ -155,9 +118,6 @@ httpServer.on('request', async (req: IncomingMessage, res: ServerResponse) => {
   }
 })
 
-// ─── AI module (dynamic, optional) ──────────────────────────────────
-// Task 2-b creates src/lib/ai.ts. If it isn't there yet (or fails to load),
-// the service still starts and handles all non-AI events.
 type AIComplexityResult = {
   complexity: number
   confidence: number
@@ -196,7 +156,6 @@ function loadAIModule(): Promise<AIModule | null> {
   return aiModulePromise
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────
 function getPresenceList(boardId: string): PresenceUser[] {
   return Array.from((presence.get(boardId) ?? new Map()).values())
 }
@@ -363,7 +322,6 @@ async function broadcastActivity(boardId: string, activity: Awaited<ReturnType<t
   io.to(boardId).emit(SOCKET_EVENTS.ACTIVITY_CREATED, toActivityDTO(activity))
 }
 
-// Pick the most specific activity type for an update patch.
 function pickUpdateActivityType(
   patch: CardUpdatePayload['patch'],
   card: { complexityAccepted: boolean; assigneeId: string | null },
@@ -374,7 +332,6 @@ function pickUpdateActivityType(
   if (patch.assigneeId !== undefined && patch.assigneeId !== card.assigneeId) {
     return { type: 'assigned', field: 'assigneeId' }
   }
-  // pick first changed field for the conflict notification
   const fields = ['complexityAccepted', 'assigneeId', 'complexity', 'title', 'description', 'dueDate'] as const
   for (const f of fields) {
     if (patch[f] !== undefined) return { type: 'updated', field: f }
@@ -382,7 +339,6 @@ function pickUpdateActivityType(
   return { type: 'updated', field: 'title' }
 }
 
-// ─── AI scheduler ───────────────────────────────────────────────────
 async function runBoardAI(boardId: string) {
   io.to(boardId).emit(SOCKET_EVENTS.AI_UPDATE, { boardId, status: 'running' })
   try {
@@ -426,7 +382,6 @@ async function runBoardAI(boardId: string) {
   }
 }
 
-// ─── Typing auto-clear sweep ────────────────────────────────────────
 const TYPING_TIMEOUT_MS = 3000
 setInterval(() => {
   const now = Date.now()
@@ -449,12 +404,10 @@ setInterval(() => {
   }
 }, 1000).unref()
 
-// ─── Socket event handlers ──────────────────────────────────────────
 io.on('connection', (socket) => {
   console.log(`[socket] connected: ${socket.id}`)
   socketBoards.set(socket.id, new Set())
 
-  // ── board:join ──────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.BOARD_JOIN, (payload: { boardId: string; user: SocketUser }) => {
     try {
       const { boardId, user } = payload
@@ -483,7 +436,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── board:leave ─────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.BOARD_LEAVE, (payload: { boardId: string }) => {
     try {
       const { boardId } = payload
@@ -493,7 +445,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── card:create ─────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.CARD_CREATE, async (payload: CardCreatePayload) => {
     try {
       const {
@@ -505,7 +456,6 @@ io.on('connection', (socket) => {
         return
       }
 
-      // Determine order = max order in column + 1
       const existing = await db.card.findFirst({
         where: { columnId },
         orderBy: { order: 'desc' },
@@ -513,7 +463,6 @@ io.on('connection', (socket) => {
       })
       const newOrder = (existing?.order ?? -1) + 1
 
-      // Fetch label names (for CardHistory)
       let labelNames: string[] = []
       if (labelIds && labelIds.length > 0) {
         const labels = await db.label.findMany({ where: { id: { in: labelIds } }, select: { name: true } })
@@ -540,7 +489,6 @@ io.on('connection', (socket) => {
         include: CARD_INCLUDE,
       })
 
-      // Activity: created
       const creator = await db.user.findUnique({ where: { id: creatorId } })
       const creatorName = creator?.name ?? 'Someone'
       const activity = await createActivity({
@@ -551,7 +499,6 @@ io.on('connection', (socket) => {
         summary: `${creatorName} created this card`,
       })
 
-      // CardHistory: created
       await db.cardHistory.create({
         data: {
           cardId: created.id,
@@ -570,13 +517,11 @@ io.on('connection', (socket) => {
       await broadcastActivity(boardId, activity)
       console.log(`[socket] card created ${created.id} in board ${boardId}`)
 
-      // AI complexity inference (best-effort)
       try {
         const mod = await loadAIModule()
         if (mod && typeof mod.inferComplexityForCard === 'function') {
           const result = await mod.inferComplexityForCard(db, created.id)
           if (result) {
-            // store suggested complexity (complexityAccepted stays false)
             const updated = await db.card.update({
               where: { id: created.id },
               data: {
@@ -616,7 +561,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── card:update ─────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.CARD_UPDATE, async (payload: CardUpdatePayload) => {
     try {
       const { boardId, cardId, expectedVersion, patch, editor } = payload
@@ -637,7 +581,6 @@ io.on('connection', (socket) => {
       const conflict = current.version !== expectedVersion
       const { type: activityType, field: conflictField } = pickUpdateActivityType(patch, current)
 
-      // Build update data from patch (only fields actually in the patch)
       const data: Record<string, unknown> = {
         version: { increment: 1 },
         lastEditedBy: editor.id,
@@ -658,7 +601,6 @@ io.on('connection', (socket) => {
         include: CARD_INCLUDE,
       })
 
-      // Conflict notification: emit ONLY to the editing socket
       if (conflict) {
         const conflictNotif: ConflictNotification = {
           cardId,
@@ -675,7 +617,6 @@ io.on('connection', (socket) => {
         console.log(`[socket] conflict on card ${cardId}: editor v${expectedVersion} vs server v${current.version}`)
       }
 
-      // Activity
       const summaryParts: string[] = [`${editor.name}`]
       if (activityType === 'assigned') {
         const newAssignee = patch.assigneeId
@@ -705,7 +646,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── card:move ───────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.CARD_MOVE, async (payload: CardMovePayload) => {
     try {
       const { boardId, cardId, fromColumnId, toColumnId, newOrder, expectedVersion, editor } = payload
@@ -737,11 +677,8 @@ io.on('connection', (socket) => {
       const movingToDone = toColumn.isDone && !current.completedAt
       const movingOutOfDone = !toColumn.isDone && current.completedAt && fromColumn.isDone
 
-      // Perform the move + reorder in a transaction
       const updated = await db.$transaction(async (tx) => {
         if (fromColumnId === toColumnId) {
-          // Within-column reorder: load all cards in column except this one,
-          // insert at newOrder position, reassign contiguous orders 0..n-1.
           const others = await tx.card.findMany({
             where: { columnId: fromColumnId, id: { not: cardId } },
             orderBy: { order: 'asc' },
@@ -764,8 +701,6 @@ io.on('connection', (socket) => {
             })
           }
         } else {
-          // Cross-column: shift down cards in source column after the old position,
-          // shift up cards in target column at or after newOrder, then move the card.
           await tx.card.updateMany({
             where: { columnId: fromColumnId, order: { gt: oldOrder } },
             data: { order: { decrement: 1 } },
@@ -798,7 +733,6 @@ io.on('connection', (socket) => {
         return
       }
 
-      // Conflict notification (same handling as update)
       if (conflict) {
         const conflictNotif: ConflictNotification = {
           cardId,
@@ -815,7 +749,6 @@ io.on('connection', (socket) => {
         console.log(`[socket] move conflict on card ${cardId}`)
       }
 
-      // Activity: moved
       const moveActivity = await createActivity({
         cardId,
         boardId,
@@ -826,7 +759,6 @@ io.on('connection', (socket) => {
       })
       await broadcastActivity(boardId, moveActivity)
 
-      // Activity + history: completed (if moved to done)
       if (movingToDone) {
         const daysToComplete = Math.max(
           0,
@@ -869,7 +801,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── card:delete ─────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.CARD_DELETE, async (payload: CardDeletePayload) => {
     try {
       const { boardId, cardId, editor } = payload
@@ -886,7 +817,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── comment:create ──────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.COMMENT_CREATE, async (payload: CommentCreatePayload) => {
     try {
       const { boardId, cardId, text, user } = payload
@@ -916,7 +846,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── user:typing ─────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.USER_TYPING, (payload: { boardId: string; cardId: string; user: SocketUser }) => {
     try {
       const { boardId, cardId, user } = payload
@@ -933,7 +862,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── cursor:move (50ms throttle per socket) ──────────────────────
   socket.on(SOCKET_EVENTS.CURSOR_MOVE, (payload: { boardId: string; x: number; y: number; user: SocketUser }) => {
     try {
       const { boardId, x, y, user } = payload
@@ -946,7 +874,6 @@ io.on('connection', (socket) => {
       if (!cursors.has(boardId)) cursors.set(boardId, new Map())
       cursors.get(boardId)!.set(socket.id, { x, y, userId: user.id })
 
-      // Update presence cursor too
       const boardPresence = presence.get(boardId)
       if (boardPresence?.has(socket.id)) {
         const p = boardPresence.get(socket.id)!
@@ -967,7 +894,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── ai:run (on-demand) ──────────────────────────────────────────
   socket.on(SOCKET_EVENTS.AI_RUN, (payload: { boardId: string }) => {
     try {
       const { boardId } = payload
@@ -981,7 +907,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── ai:subscribe ────────────────────────────────────────────────
   socket.on(SOCKET_EVENTS.AI_SUBSCRIBE, (payload: { boardId: string }) => {
     try {
       const { boardId } = payload
@@ -993,7 +918,6 @@ io.on('connection', (socket) => {
     }
   })
 
-  // ── disconnect ──────────────────────────────────────────────────
   socket.on('disconnect', () => {
     console.log(`[socket] disconnected: ${socket.id}`)
     const boards = socketBoards.get(socket.id)
@@ -1021,12 +945,10 @@ function leaveBoard(socketId: string, boardId: string) {
   boardCursors?.delete(socketId)
   if (boardCursors && boardCursors.size === 0) cursors.delete(boardId)
 
-  // Remove typers for this socket's user from all cards in the board
   const cards = typing.get(boardId)
   if (cards) {
     for (const [cardId, users] of cards.entries()) {
       const before = users.size
-      // remove by matching socketId isn't possible (keyed by userId); instead remove by user
       const user = socketUserMap.get(socketId)
       if (user) users.delete(user.id)
       if (users.size !== before) {
@@ -1039,11 +961,9 @@ function leaveBoard(socketId: string, boardId: string) {
   }
 
   socketBoards.get(socketId)?.delete(boardId)
-  // Use io.sockets (the socket may already be disconnected; emit to room anyway)
   broadcastPresence(boardId)
 }
 
-// ─── readBody helper (used by the internal HTTP handler above) ───────
 function readBody(req: IncomingMessage): Promise<string> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = []
@@ -1053,7 +973,6 @@ function readBody(req: IncomingMessage): Promise<string> {
   })
 }
 
-// ─── AI scheduler: periodic + initial run ───────────────────────────
 const SIX_HOURS_MS = 6 * 60 * 60 * 1000
 
 async function runAIForAllBoards() {
@@ -1073,22 +992,18 @@ async function runAIForAllBoards() {
 const schedulerTimer = setInterval(runAIForAllBoards, SIX_HOURS_MS)
 schedulerTimer.unref()
 
-// Initial run ~10s after startup (so a freshly started server regenerates insights quickly)
 setTimeout(() => {
   runAIForAllBoards().catch((e) =>
     console.error(`[socket:error] initial AI run failed: ${String(e)}`),
   )
 }, 10_000).unref()
 
-// ─── Start ───────────────────────────────────────────────────────────
 const PORT = 3003
 httpServer.listen(PORT, () => {
   console.log(`[socket] server listening on port ${PORT}`)
-  // Kick off AI module load (async, non-blocking)
   loadAIModule()
 })
 
-// ─── Graceful shutdown ──────────────────────────────────────────────
 async function shutdown(signal: string) {
   console.log(`[socket] ${signal} received, shutting down...`)
   try {

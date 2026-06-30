@@ -1,11 +1,3 @@
-// AI engine — orchestration entrypoint.
-//
-// Re-exports the five heuristic modules and provides `runAIAnalysis` which
-// runs them in sequence, persisting each as an AIInsight row and streaming
-// it to an optional onInsight callback (this is the "streaming" behaviour
-// the assignment requires — insights appear one at a time, not all at once).
-//
-// All AI here is CPU-bound heuristics. No external LLM is called.
 
 import { PrismaClient } from "@prisma/client";
 import type {
@@ -24,7 +16,6 @@ import { inferComplexity } from "./complexity";
 import { generateDigest } from "./digest";
 import { suggestAssignee } from "./assignment";
 
-// ── Re-exports ───────────────────────────────────────────────────
 export { detectBottlenecks } from "./bottleneck";
 export { assessSprintRisk } from "./risk";
 export { inferComplexity } from "./complexity";
@@ -101,7 +92,6 @@ export async function runAIAnalysis(
   const insights: AIInsightDTO[] = [];
   const onInsight = opts.onInsight ?? (() => {});
 
-  // ── 1. Bottleneck detection ────────────────────────────────────
   try {
     const bottlenecks: BottleneckResult[] = await detectBottlenecks(db, boardId);
     for (const b of bottlenecks) {
@@ -132,7 +122,6 @@ export async function runAIAnalysis(
     console.error("[ai] bottleneck detection failed:", err);
   }
 
-  // ── 2. Sprint risk assessment ──────────────────────────────────
   try {
     const risk: SprintRiskResult | null = await assessSprintRisk(db, boardId);
     if (risk) {
@@ -155,7 +144,6 @@ export async function runAIAnalysis(
     console.error("[ai] sprint risk failed:", err);
   }
 
-  // ── 3. Assignment suggestions (for unassigned, non-done cards) ──
   try {
     const nonDoneCols = await db.column.findMany({
       where: { boardId, isDone: false },
@@ -196,9 +184,6 @@ export async function runAIAnalysis(
     console.error("[ai] assignment failed:", err);
   }
 
-  // ── 4. Digest ──────────────────────────────────────────────────
-  // (Complexity is handled separately on card creation, not in this
-  // scheduled run — but we do emit a digest insight summarising the week.)
   let digest: DigestContent | null = null;
   try {
     digest = await generateDigest(db, boardId);

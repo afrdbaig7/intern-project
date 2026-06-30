@@ -11,9 +11,6 @@ import { Sidebar } from "./sidebar";
 import { BoardView } from "@/components/board/board-view";
 import { Skeleton } from "@/components/ui/skeleton";
 
-// Dynamic imports for the panels owned by Task 3-b. ssr:false so a missing
-// file at build time never breaks the route; the loader shows a skeleton
-// while the chunk is fetched. The panels use default exports.
 const TeamView = dynamic(() => import("@/components/panels/team-view"), {
   ssr: false,
   loading: () => <PanelSkeleton />,
@@ -55,7 +52,6 @@ export function AppShell() {
     queryFn: api.listBoards,
   });
 
-  // Auto-select the first board on mount if none selected.
   React.useEffect(() => {
     if (currentBoardId) return;
     if (boardsQuery.data && boardsQuery.data.length > 0) {
@@ -73,8 +69,6 @@ export function AppShell() {
             <EmptyBoardState
               loading={boardsQuery.isLoading}
               onCreate={() => {
-                // Switch to the board tab; the sidebar’s “New board” dialog
-                // is the canonical entry. Fallback: just focus the sidebar.
                 setActiveTab("board");
               }}
             />

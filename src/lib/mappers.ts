@@ -1,5 +1,3 @@
-// Prisma model → DTO mappers. Every API response goes through these so the
-// shape is guaranteed to match the shared DTOs in src/lib/types.ts.
 
 import type {
   Activity,
@@ -35,7 +33,6 @@ import type {
   UserDTO,
 } from "@/lib/types";
 
-// ─── JSON helpers ──────────────────────────────────────────────────────────
 export function safeJsonParse<T = Record<string, unknown> | null>(
   raw: string | null | undefined,
   fallback: T = null as T,
@@ -48,7 +45,6 @@ export function safeJsonParse<T = Record<string, unknown> | null>(
   }
 }
 
-// ─── Primitive mappers ─────────────────────────────────────────────────────
 export function toUserDTO(u: User): UserDTO {
   return {
     id: u.id,
@@ -80,7 +76,6 @@ export function toLabelDTO(l: Label): LabelDTO {
   };
 }
 
-// ─── Relational mappers ────────────────────────────────────────────────────
 export type MemberWithUser = BoardMember & { user: User };
 export function toMemberDTO(m: MemberWithUser): BoardMemberDTO {
   return {
@@ -233,7 +228,6 @@ export function toDigestDTO(d: Digest): DigestDTO {
   };
 }
 
-// ─── Prisma include helpers (single source of truth) ───────────────────────
 export const CARD_INCLUDE = {
   assignee: true,
   creator: true,
@@ -251,7 +245,6 @@ export const BOARD_DETAIL_INCLUDE = {
   cards: { include: CARD_INCLUDE },
 } as const;
 
-// ─── Time Tracking (bonus) ─────────────────────────────────────────────────
 export type TimeEntryWithUser = TimeEntry & { user: User };
 
 export function toTimeEntryDTO(e: TimeEntryWithUser): TimeEntryDTO {

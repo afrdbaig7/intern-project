@@ -6,23 +6,18 @@ import type { UserDTO } from "@/lib/types";
 export type ViewTab = "board" | "team" | "ai" | "digest" | "github";
 
 interface AppState {
-  // auth
   user: UserDTO | null;
   setUser: (u: UserDTO | null) => void;
 
-  // current board
   currentBoardId: string | null;
   setCurrentBoardId: (id: string | null) => void;
 
-  // active view tab
   activeTab: ViewTab;
   setActiveTab: (t: ViewTab) => void;
 
-  // selected card for the detail modal
   selectedCardId: string | null;
   selectCard: (id: string | null) => void;
 
-  // sidebar collapse
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
 }
@@ -44,7 +39,6 @@ export const useAppStore = create<AppState>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
 }));
 
-// Query key factory for consistent cache keys --------------------------
 export const qk = {
   boards: ["boards"] as const,
   board: (id: string) => ["board", id] as const,

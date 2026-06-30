@@ -1,12 +1,8 @@
-// Seed script: creates demo users, a board (software-sprint template),
-// columns, labels, sample cards, and card history for AI heuristics.
-// Run with: bun run db:seed
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
 
-// All demo accounts share this password so graders can log in quickly.
 const DEMO_PASSWORD = "demo123";
 const DEMO_PASSWORD_HASH = bcrypt.hashSync(DEMO_PASSWORD, 10);
 
@@ -16,7 +12,6 @@ async function main() {
   console.log("🌱 Seeding database...");
   console.log(`   Demo password for all seeded accounts: "${DEMO_PASSWORD}"`);
 
-  // ── Users ──────────────────────────────────────────────────────
   const users = await Promise.all(
     [
       { name: "Aarav Sharma", email: "aarav@kanban.ai", githubUsername: "aaravsharma" },
@@ -32,7 +27,6 @@ async function main() {
   );
   console.log(`  ✓ ${users.length} users`);
 
-  // ── Board (software sprint) ────────────────────────────────────
   const board = await db.board.create({
     data: {
       name: "Q4 Platform Sprint",
@@ -43,7 +37,6 @@ async function main() {
     },
   });
 
-  // members
   await Promise.all(
     users.map((u, i) =>
       db.boardMember.create({
@@ -53,7 +46,6 @@ async function main() {
   );
   console.log(`  ✓ Board "${board.name}" with ${users.length} members`);
 
-  // ── Columns ────────────────────────────────────────────────────
   const columnDefs = [
     { name: "Backlog", color: "#64748b", isDone: false },
     { name: "To Do", color: "#0ea5e9", isDone: false },
@@ -67,7 +59,6 @@ async function main() {
     )
   );
 
-  // ── Labels ─────────────────────────────────────────────────────
   const labelDefs = [
     { name: "bug", color: "#ef4444" },
     { name: "feature", color: "#3b82f6" },
@@ -82,7 +73,6 @@ async function main() {
   );
   console.log(`  ✓ ${columns.length} columns, ${labels.length} labels`);
 
-  // ── Cards ──────────────────────────────────────────────────────
   const labelByName = (name: string) => labels.find((l) => l.name === name)!;
 
   const cardDefs: {
@@ -96,23 +86,18 @@ async function main() {
     daysAgoCreated?: number;
     daysAgoCompleted?: number;
   }[] = [
-    // Backlog
     { columnIdx: 0, title: "Investigate webhook retry backoff strategy", description: "Research exponential backoff vs jittered backoff for failed webhook deliveries. Write a short design doc with a recommendation.", assigneeIdx: -1, creatorIdx: 1, labelNames: ["api", "research" as any], complexity: 3, daysAgoCreated: 2 },
     { columnIdx: 0, title: "Add audit log export to CSV", description: "Allow admins to export the audit log filtered by date range and actor. Streaming response to handle large exports.", assigneeIdx: -1, creatorIdx: 0, labelNames: ["feature"], complexity: 2, daysAgoCreated: 3 },
-    // To Do
     { columnIdx: 1, title: "Migrate auth to JWT refresh tokens", description: "Split long-lived access tokens into short-lived access + rotating refresh. Implement refresh endpoint and revoke list. Touches session store, middleware, and both clients.", assigneeIdx: 2, creatorIdx: 0, labelNames: ["api", "refactor"], complexity: 5, daysAgoCreated: 4 },
     { columnIdx: 1, title: "Dark mode polish for charts", description: "Recharts tooltips and gridlines still use light palette in dark mode. Audit every chart and swap to CSS variables.", assigneeIdx: 3, creatorIdx: 3, labelNames: ["frontend"], complexity: 2, daysAgoCreated: 2 },
     { columnIdx: 1, title: "Add rate limiting to import endpoint", description: "GitHub import can be abused. Add a token-bucket limiter per user, 5 imports / hour.", assigneeIdx: 4, creatorIdx: 0, labelNames: ["api", "performance"], complexity: 3, daysAgoCreated: 1 },
-    // In Progress (bottleneck: many cards, few leaving)
     { columnIdx: 2, title: "Real-time cursor sharing", description: "Broadcast mouse position over socket.io to other users viewing the same board. Throttle to 30fps and interpolate on the client. Handle viewport scaling for different screen sizes.", assigneeIdx: 1, creatorIdx: 1, labelNames: ["frontend", "feature"], complexity: 4, daysAgoCreated: 6 },
     { columnIdx: 2, title: "Refactor card move to use operational ids", description: "Currently card moves use array index. Move to stable card ids so concurrent moves don't clobber ordering. Add integration test for 10 concurrent drags.", assigneeIdx: 2, creatorIdx: 1, labelNames: ["refactor", "performance"], complexity: 4, daysAgoCreated: 5 },
     { columnIdx: 2, title: "AI bottleneck detector v2", description: "Improve cause attribution: detect overloaded assignees, stuck labels, and cross-column dependency chains. Surface plain-English explanation in the insights panel.", assigneeIdx: 0, creatorIdx: 0, labelNames: ["feature", "api"], complexity: 5, daysAgoCreated: 5 },
     { columnIdx: 2, title: "Fix Safari drag flicker", description: "Cards flicker when dragged between columns in Safari 17. Likely a transform + will-change interaction.", assigneeIdx: 3, creatorIdx: 3, labelNames: ["bug", "frontend"], complexity: 2, daysAgoCreated: 4 },
     { columnIdx: 2, title: "Add keyboard shortcuts for card ops", description: "C to create, E to edit, arrows to move between columns, Delete to archive. Show shortcut hints in tooltips.", assigneeIdx: 4, creatorIdx: 4, labelNames: ["frontend", "feature"], complexity: 3, daysAgoCreated: 3 },
-    // Review
     { columnIdx: 3, title: "GitHub import dedup test", description: "Verify running import twice on the same repo produces zero duplicate cards. Add a regression test.", assigneeIdx: 2, creatorIdx: 0, labelNames: ["api"], complexity: 2, daysAgoCreated: 4, daysAgoCompleted: 1 },
     { columnIdx: 3, title: "Complexity inference heuristic", description: "Ship the v1 keyword + length + label heuristic for 1-5 story points. Wire up accept/override UI.", assigneeIdx: 0, creatorIdx: 1, labelNames: ["feature", "api"], complexity: 3, daysAgoCreated: 5, daysAgoCompleted: 1 },
-    // Done
     { columnIdx: 4, title: "Board persistence across restarts", description: "Confirmed SQLite file survives process restart. Added migration script.", assigneeIdx: 1, creatorIdx: 1, labelNames: ["api"], complexity: 1, daysAgoCreated: 8, daysAgoCompleted: 5 },
     { columnIdx: 4, title: "Socket.io presence tracking", description: "Track which users are viewing which board. Broadcast join/leave. Show avatars in the header.", assigneeIdx: 3, creatorIdx: 1, labelNames: ["feature", "frontend"], complexity: 3, daysAgoCreated: 7, daysAgoCompleted: 4 },
     { columnIdx: 4, title: "Card detail modal", description: "Show description, assignee, labels, complexity, comments, activity timeline in a polished modal.", assigneeIdx: 4, creatorIdx: 3, labelNames: ["frontend"], complexity: 3, daysAgoCreated: 7, daysAgoCompleted: 3 },
@@ -147,7 +132,6 @@ async function main() {
       },
     });
 
-    // attach labels (filter out invalid "research")
     const validLabels = c.labelNames.filter((n) => labels.some((l) => l.name === n));
     await Promise.all(
       validLabels.map((n) =>
@@ -155,7 +139,6 @@ async function main() {
       )
     );
 
-    // activity: created
     await db.activity.create({
       data: {
         cardId: card.id,
@@ -192,7 +175,6 @@ async function main() {
       });
     }
 
-    // card history (training data for AI)
     await db.cardHistory.create({
       data: {
         cardId: card.id,
@@ -223,7 +205,6 @@ async function main() {
   }
   console.log(`  ✓ ${cardDefs.length} cards with labels, activity, history`);
 
-  // ── A second board (product roadmap) for variety ───────────────
   const board2 = await db.board.create({
     data: {
       name: "Product Roadmap 2025",

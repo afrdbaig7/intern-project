@@ -37,23 +37,12 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
-local-*
-.claude
-.z-ai-config
-*.log
-dev.log
-dev.out.log
-test
-prompt
 
-server.log
-# Skills directory
-/skills/
-# Stray tool output / scratch files
-/tool-results/
-/scripts/test-*
-/agent-ctx/
+# logs
+*.log
+
+# database
+/db/*.db

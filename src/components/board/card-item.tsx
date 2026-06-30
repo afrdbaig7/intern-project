@@ -66,8 +66,6 @@ export function CardItem({ card, isDragging }: CardItemProps) {
 
   const onClick = React.useCallback(
     (e: React.MouseEvent) => {
-      // Suppress click right after a drag — dnd-kit fires a click on mouseup
-      // but `isDragging` will still be true in that frame.
       if (dragging) return;
       e.preventDefault();
       selectCard(card.id);

@@ -40,7 +40,6 @@ async function loadDependencies(cardId: string): Promise<CardDependenciesDTO> {
   };
 }
 
-// GET /api/cards/[id]/dependencies — { blockers, blocked }
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -51,8 +50,6 @@ export async function GET(
   return ok(await loadDependencies(id));
 }
 
-// POST /api/cards/[id]/dependencies
-// Body: { blockerId } — mark `id` as blocked by `blockerId`.
 export async function POST(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -86,7 +83,6 @@ export async function POST(
     return err("Both cards must be on the same board", 400);
   }
 
-  // Duplicate check (the @@unique will also catch it, but we want a 409).
   const existing = await db.cardDependency.findUnique({
     where: { blockerId_blockedId: { blockerId, blockedId: id } },
   });
@@ -94,9 +90,6 @@ export async function POST(
     return err("This dependency already exists", 409);
   }
 
-  // Cycle guard: if `blocker` is already (transitively) blocked by `id`,
-  // creating this edge would form a cycle. Simple 1-hop + 2-hop check is
-  // enough in practice — a full DFS is overkill for a Kanban board.
   const reverseExisting = await db.cardDependency.findUnique({
     where: { blockerId_blockedId: { blockerId: id, blockedId: blockerId } },
   });
@@ -111,8 +104,6 @@ export async function POST(
     data: { blockerId, blockedId: id },
   });
 
-  // Bump version on the blocked card so optimistic-concurrency clients can
-  // reconcile. Persist an Activity row as well.
   const updated = await db.$transaction(async (tx) => {
     const card = await tx.card.update({
       where: { id },
@@ -135,14 +126,11 @@ export async function POST(
     return card;
   });
 
-  // Broadcast the updated blocked card so the board/modal stays in sync.
   void broadcast(updated.boardId, "card:updated", toCardDTO(updated));
 
   return ok(await loadDependencies(id));
 }
 
-// DELETE /api/cards/[id]/dependencies
-// Body: { blockerId } — remove the dependency where `id` was blocked by `blockerId`.
 export async function DELETE(
   req: NextRequest,
   ctx: { params: Promise<{ id: string }> },

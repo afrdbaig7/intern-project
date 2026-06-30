@@ -15,18 +15,6 @@ import {
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// POST /api/clip — Chrome extension entry point.
-// Body: { title, description?, sourceUrl?, boardId, columnId, creatorId? }
-//
-// This endpoint works WITHOUT a logged-in cookie:
-//   1. Use creatorId from the body if provided
-//   2. Otherwise fall back to the cookie user
-//   3. Otherwise fall back to the first board member
-//
-// Creates a card (order = max in column + 1, version 1), an Activity row
-// ("created"), a CardHistory row, broadcasts `card:created`, then triggers
-// AI complexity inference — if a suggestion is returned it saves complexity
-// on the card and broadcasts `card:updated` + `ai:insight`.
 export async function POST(req: NextRequest) {
   const body = await parseBody<{
     title?: string;
@@ -45,7 +33,6 @@ export async function POST(req: NextRequest) {
   if (!boardId) return err("boardId is required", 400);
   if (!columnId) return err("columnId is required", 400);
 
-  // Validate board + column in one shot.
   const column = await db.column.findUnique({
     where: { id: columnId },
     include: { board: { include: { members: true } } },
@@ -54,7 +41,6 @@ export async function POST(req: NextRequest) {
     return notFound("Board or column not found");
   }
 
-  // Resolve creator.
   let creatorId = body.creatorId ?? null;
   if (!creatorId) {
     const cookieUser = await getCurrentUser(req);
@@ -72,14 +58,12 @@ export async function POST(req: NextRequest) {
     return err(`User ${creatorId} does not exist`, 400);
   }
 
-  // Determine the next order in the column.
   const maxOrderRow = await db.card.aggregate({
     where: { columnId },
     _max: { order: true },
   });
   const nextOrder = (maxOrderRow._max.order ?? -1) + 1;
 
-  // Create the card + Activity + CardHistory in one transaction.
   const created = await db.$transaction(async (tx) => {
     const card = await tx.card.create({
       data: {
@@ -121,11 +105,8 @@ export async function POST(req: NextRequest) {
     return card;
   });
 
-  // Broadcast the new card.
   void broadcast(boardId, "card:created", toCardDTO(created));
 
-  // Best-effort AI complexity inference. If the AI module isn't available,
-  // this is a no-op and we just return the card as created.
   try {
     const suggestion = await inferComplexityForCard(db, created.id);
 
@@ -144,7 +125,6 @@ export async function POST(req: NextRequest) {
 
       void broadcast(boardId, "card:updated", toCardDTO(updated));
 
-      // Also emit an ai:insight event so the UI can surface it inline.
       void broadcast(boardId, "ai:insight", {
         type: "complexity",
         severity: "info",

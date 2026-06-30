@@ -23,7 +23,6 @@ export default function Home() {
         if (cancelled) return;
         if (me) setUser(me);
       } catch (err) {
-        // 401 is fine — not logged in. Anything else, log for debugging.
         if (!(err instanceof ApiError) || err.status !== 401) {
           console.warn("[page] me() failed", err);
         }

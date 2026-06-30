@@ -1,6 +1,3 @@
-// GitHub issue fetching utilities. Public repos only — no auth token.
-// Used by /api/github/preview and /api/github/import.
-
 import type { GitHubIssue } from "./types";
 
 const GITHUB_API = "https://api.github.com";
@@ -24,12 +21,10 @@ export function normalizeRepo(input: string): string | null {
   const s = input.trim();
   if (!s) return null;
 
-  // Bare "owner/name" (no slashes in either part, no scheme).
   if (/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(s)) {
     return s;
   }
 
-  // Otherwise treat as URL. Add a scheme if missing so URL() doesn't choke.
   const urlStr = /^https?:\/\//i.test(s) ? s : `https://${s}`;
   let url: URL;
   try {
@@ -45,7 +40,6 @@ export function normalizeRepo(input: string): string | null {
 
   const owner = parts[0];
   const name = parts[1];
-  // Strip trailing .git if present
   const cleanName = name.endsWith(".git") ? name.slice(0, -4) : name;
   return `${owner}/${cleanName}`;
 }
@@ -152,7 +146,6 @@ export async function fetchOpenIssues(repo: string): Promise<FetchResult> {
       };
     }
 
-    // PRs come back in the issues API — filter them out.
     const issuesOnly = pageItems.filter(
       (i) => i && typeof i === "object" && !("pull_request" in (i as object)),
     );
@@ -192,11 +185,8 @@ export async function fetchOpenIssues(repo: string): Promise<FetchResult> {
       });
     }
 
-    // Stop early if the page was short (end of results).
     if (pageItems.length < 30) break;
 
-    // Otherwise advance, but prefer the Link header — if there's no rel="next"
-    // we're done even if the page was exactly 100.
     const link = res.headers.get("link") ?? "";
     if (!link.includes('rel="next"')) break;
 
@@ -206,7 +196,6 @@ export async function fetchOpenIssues(repo: string): Promise<FetchResult> {
   return { ok: true, issues: all };
 }
 
-// ─── Label color palette for new labels created during import ──────────────
 const LABEL_PALETTE = [
   "#ef4444",
   "#f59e0b",

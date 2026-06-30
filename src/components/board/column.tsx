@@ -138,7 +138,6 @@ function InlineCardCreate({
         creatorId: user.id,
       });
       setTitle("");
-      // Keep the input focused for rapid entry.
       requestAnimationFrame(() => inputRef.current?.focus());
       toast.success("Card created");
     } finally {

@@ -24,7 +24,6 @@ import { emitAIRun, onAiComplete, onAiUpdate } from "@/lib/socket";
 import { qk } from "@/store/app-store";
 import type { DigestDTO } from "@/lib/types";
 
-// recharts
 import {
   Area,
   AreaChart,
@@ -35,7 +34,6 @@ import {
   YAxis,
 } from "recharts";
 
-// ─── Helpers ───────────────────────────────────────────────────────────
 function hashToHue(name: string): number {
   return Array.from(name).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
 }
@@ -51,8 +49,6 @@ function DigestView({ boardId }: { boardId: string }) {
     queryFn: () => api.digest(boardId),
   });
 
-  // Subscribe to AI run events: when AI starts running, mark regenerating;
-  // when AI completes, refetch the digest so the new one shows up immediately.
   useEffect(() => {
     const offUpdate = onAiUpdate((payload) => {
       const p = payload as { status?: string };
@@ -257,7 +253,6 @@ function DigestView({ boardId }: { boardId: string }) {
             } catch {
               /* socket path will still fire */
             }
-            // Fallback refetch in case the socket AI-complete event is missed
             setTimeout(() => {
               queryClient.invalidateQueries({ queryKey: qk.digest(boardId) });
             }, 5000);
@@ -276,7 +271,6 @@ function DigestView({ boardId }: { boardId: string }) {
   );
 }
 
-// ─── Stat card ─────────────────────────────────────────────────────────
 function StatCard({
   label,
   value,
@@ -325,7 +319,6 @@ function StatCard({
   );
 }
 
-// ─── Assignee bars ─────────────────────────────────────────────────────
 function AssigneeBars({
   data,
 }: {
@@ -382,7 +375,6 @@ function AssigneeBars({
   );
 }
 
-// ─── States ────────────────────────────────────────────────────────────
 function DigestSkeleton() {
   return (
     <div className="space-y-5">

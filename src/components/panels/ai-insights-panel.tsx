@@ -42,7 +42,6 @@ import type {
   SprintRiskResult,
 } from "@/lib/types";
 
-// ─── Helpers ───────────────────────────────────────────────────────────
 type Severity = "info" | "warning" | "critical";
 const SEVERITY_BAR: Record<Severity, string> = {
   critical: "bg-red-500",
@@ -86,13 +85,11 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
   const [aiRunning, setAiRunning] = useState(false);
   const [newIds, setNewIds] = useState<Set<string>>(new Set());
 
-  // ── Query insights (newest first from API) ──
   const { data, isLoading, isError, error } = useQuery<AIInsightDTO[]>({
     queryKey: qk.insights(boardId),
     queryFn: () => api.insights(boardId),
   });
 
-  // ── Socket: streaming insights ──
   useEffect(() => {
     const offInsight = onAiInsight((payload) => {
       const insight = payload as AIInsightDTO;
@@ -107,7 +104,6 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
         next.add(insight.id);
         return next;
       });
-      // Auto-clear the highlight pulse after a few seconds
       setTimeout(() => {
         setNewIds((s) => {
           const next = new Set(s);
@@ -132,7 +128,6 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
       const p = payload as { insightCount?: number };
       setAiRunning(false);
       if (typeof p?.insightCount === "number") {
-        // Refresh the digest too — the AI run generates one
         queryClient.invalidateQueries({ queryKey: qk.digest(boardId) });
       }
     });
@@ -154,7 +149,6 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
       emitAIRun(boardId);
       await api.runAI(boardId);
     } catch (err) {
-      // socket may still be running; only surface hard errors
       if (err instanceof ApiError) {
         toast.error("Couldn't start AI analysis", { description: err.message });
         setAiRunning(false);
@@ -162,7 +156,6 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
     }
   };
 
-  // ── Filter + count by type ──
   const insights = useMemo(() => data ?? [], [data]);
   const counts = useMemo(() => {
     const c: Record<string, number> = { all: insights.length };
@@ -301,7 +294,6 @@ function AIInsightsPanel({ boardId }: { boardId: string }) {
   );
 }
 
-// ─── Single insight row ───────────────────────────────────────────────
 function InsightRow({
   insight,
   boardId,
@@ -317,14 +309,12 @@ function InsightRow({
   const truncated = insight.message.length > 180;
 
   const markRead = async (read: boolean) => {
-    // Optimistic update
     queryClient.setQueryData<AIInsightDTO[]>(qk.insights(boardId), (old) =>
       (old ?? []).map((i) => (i.id === insight.id ? { ...i, read } : i))
     );
     try {
       await api.markInsight(boardId, insight.id, read);
     } catch {
-      // revert on error
       queryClient.invalidateQueries({ queryKey: qk.insights(boardId) });
     }
   };
@@ -435,7 +425,6 @@ function InsightRow({
   );
 }
 
-// ─── Per-type metadata rendering ───────────────────────────────────────
 function InsightMetadata({ insight }: { insight: AIInsightDTO }) {
   const m = insight.metadata;
   if (!m) return null;
@@ -543,7 +532,6 @@ function MetaChip({
   );
 }
 
-// ─── States ────────────────────────────────────────────────────────────
 function InsightListSkeleton() {
   return (
     <div className="space-y-2.5">

@@ -8,23 +8,6 @@ import { broadcast, err, notFound, ok, parseBody } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// POST /api/github/import — re-fetch open issues and import the NEW ones
-// (skipping any whose number already exists as a card with that githubRepo).
-//
-// Body: { repo, boardId, columnId, creatorId }
-//
-// For each new issue:
-//   - Create a Card (title, description = body + "\n\nGitHub: <url>",
-//     githubIssueNumber, githubRepo, order = incrementing, version 1)
-//   - Map labels: find-or-create Label by name on the board (reuse existing
-//     color, else palette color). Create CardLabel rows.
-//   - Map assignees: find a board member with matching githubUsername; if
-//     found set assigneeId (first match).
-//   - Create Activity "created" + CardHistory.
-// After all cards are created, batch-broadcast per-card `card:created` and a
-// single `github:imported` event { boardId, repo, count }.
-//
-// Returns { imported, skipped, total }.
 export async function POST(req: NextRequest) {
   const body = await parseBody<{
     repo?: string;
@@ -51,7 +34,6 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Validate board + column + creator in one pass.
   const [board, column, creator, members] = await Promise.all([
     db.board.findUnique({
       where: { id: boardId },
@@ -74,7 +56,6 @@ export async function POST(req: NextRequest) {
   }
   if (!creator) return notFound("Creator user not found");
 
-  // Build a github username → userId map for assignee mapping.
   const ghUserMap = new Map<string, string>();
   for (const m of members) {
     if (m.user.githubUsername) {
@@ -82,14 +63,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Re-fetch issues.
   const fetched = await fetchOpenIssues(repo);
   if (!fetched.ok) {
     return err(fetched.error, fetched.status, { repo });
   }
   const allIssues = fetched.issues;
 
-  // Find which issue numbers are already imported as cards.
   const existing = await db.card.findMany({
     where: { boardId, githubRepo: repo },
     select: { githubIssueNumber: true },
@@ -106,7 +85,6 @@ export async function POST(req: NextRequest) {
   const skipped = allIssues.length - newIssues.length;
 
   if (newIssues.length === 0) {
-    // Nothing new — still emit the imported event so the UI can show 0.
     void broadcast(boardId, "github:imported", {
       boardId,
       repo,
@@ -115,22 +93,18 @@ export async function POST(req: NextRequest) {
     return ok({ imported: 0, skipped, total: allIssues.length });
   }
 
-  // Pre-load all existing labels on the board for find-or-create.
   const existingLabels = await db.label.findMany({ where: { boardId } });
   const labelByName = new Map(existingLabels.map((l) => [l.name, l]));
 
-  // Compute the starting order = max order in column + 1.
   const maxOrderRow = await db.card.aggregate({
     where: { columnId },
     _max: { order: true },
   });
   let nextOrder = (maxOrderRow._max.order ?? -1) + 1;
 
-  // Create cards in sequence (we need ordered `nextOrder` and label resolution).
   let imported = 0;
 
   for (const issue of newIssues) {
-    // Find-or-create labels (one transaction per issue to keep it simple).
     const labelIds: string[] = [];
     for (let li = 0; li < issue.labels.length; li++) {
       const name = issue.labels[li];
@@ -145,7 +119,6 @@ export async function POST(req: NextRequest) {
             },
           });
         } catch {
-          // race condition / unique constraint — fetch the existing one.
           label =
             (await db.label.findUnique({
               where: { boardId_name: { boardId, name } },
@@ -156,7 +129,6 @@ export async function POST(req: NextRequest) {
       if (label) labelIds.push(label.id);
     }
 
-    // Resolve assignee (first matching member).
     let assigneeId: string | null = null;
     for (const login of issue.assignees) {
       const uid = ghUserMap.get(login.toLowerCase());
@@ -190,9 +162,6 @@ export async function POST(req: NextRequest) {
       });
 
       if (labelIds.length > 0) {
-        // Dedupe — SQLite's createMany doesn't support skipDuplicates, so we
-        // filter unique ids before insert. (labelIds may contain dupes if the
-        // same label name appeared multiple times on the issue.)
         const uniqueLabelIds = Array.from(new Set(labelIds));
         await tx.cardLabel.createMany({
           data: uniqueLabelIds.map((labelId) => ({
@@ -230,9 +199,6 @@ export async function POST(req: NextRequest) {
     nextOrder += 1;
     imported += 1;
 
-    // Incremental broadcast so the board updates as cards arrive.
-    // `reloaded` re-fetches the card with labels (cardLabel.createMany
-    // doesn't populate the include on the returned object).
     const reloaded = await db.card.findUnique({
       where: { id: card.id },
       include: CARD_INCLUDE,
@@ -242,7 +208,6 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // Final aggregate event.
   void broadcast(boardId, "github:imported", {
     boardId,
     repo,

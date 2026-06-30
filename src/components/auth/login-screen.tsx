@@ -34,7 +34,6 @@ export function LoginScreen() {
   const [submitting, setSubmitting] = React.useState(false);
   const [showDemo, setShowDemo] = React.useState(false);
 
-  // Local validation errors (shown inline).
   const [errors, setErrors] = React.useState<Record<string, string>>({});
 
   const validate = (): boolean => {
@@ -76,7 +75,6 @@ export function LoginScreen() {
     }
   };
 
-  // Quick-fill a demo account.
   const fillDemo = (demoEmail: string) => {
     setMode("signin");
     setEmail(demoEmail);
@@ -287,8 +285,6 @@ export function LoginScreen() {
     </div>
   );
 }
-
-// Small helper components ----------------------------------------------------
 
 function FieldShell({
   label,

@@ -38,7 +38,6 @@ export function PresenceAvatars() {
   const users = usePresence();
   const me = useAppStore((s) => s.user);
 
-  // De-dup by user id (a user may have multiple sockets/tabs).
   const seen = new Set<string>();
   const deduped: PresenceUser[] = [];
   for (const u of users) {
@@ -46,7 +45,6 @@ export function PresenceAvatars() {
     seen.add(u.id);
     deduped.push(u);
   }
-  // Always show the local user at the front if not already present.
   if (me && !seen.has(me.id)) {
     deduped.unshift({
       id: me.id,

@@ -7,8 +7,6 @@ import { err, notFound, ok, parseBody } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// PATCH /api/boards/[id]/insights/[insightId] — mark insight read/unread.
-// Body: { read: boolean }
 export async function PATCH(
   req: NextRequest,
   ctx: { params: Promise<{ id: string; insightId: string }> },

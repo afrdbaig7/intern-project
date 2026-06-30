@@ -32,7 +32,6 @@ import { api, ApiError } from "@/lib/api";
 import { qk, useAppStore } from "@/store/app-store";
 import type { BoardDetailDTO, GitHubImportPreview } from "@/lib/types";
 
-// ─── Helpers ───────────────────────────────────────────────────────────
 function hashToHue(name: string): number {
   return Array.from(name).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
 }
@@ -43,12 +42,10 @@ function labelBg(name: string): string {
   return `hsl(${hashToHue(name)} 65% 45% / 0.16)`;
 }
 
-// Light client-side validation — accepts "owner/name" or any github.com URL.
 function isValidRepoInput(raw: string): boolean {
   const s = raw.trim();
   if (!s) return false;
   if (/^https?:\/\/github\.com\//i.test(s)) return true;
-  // owner/name — owner and name are alphanumeric + dashes/dots/underscores
   return /^[\w.-]+\/[\w.-]+$/.test(s);
 }
 
@@ -71,15 +68,11 @@ function GitHubImportPanel({ boardId }: { boardId: string }) {
     repo: string;
   } | null>(null);
 
-  // Load the board (single query) so we can populate the column selector.
   const { data: board, isLoading: boardLoading } = useQuery<BoardDetailDTO>({
     queryKey: qk.fullBoard(boardId),
     queryFn: () => api.getFullBoard(boardId),
   });
 
-  // Default to the first non-done column (e.g. Backlog / To Do) once the board loads.
-  // We derive this lazily rather than setting state in an effect (which would
-  // trigger a cascading render per the react-hooks lint rule).
   const defaultColumnId = useMemo(() => {
     if (!board) return "";
     const firstNonDone = board.columns.find((c) => !c.isDone);
@@ -127,8 +120,6 @@ function GitHubImportPanel({ boardId }: { boardId: string }) {
               : undefined,
         }
       );
-      // The board refetch will be triggered by the realtime hook on github:imported,
-      // but we also invalidate optimistically so the cards appear without waiting.
       queryClient.invalidateQueries({ queryKey: qk.fullBoard(boardId) });
       queryClient.invalidateQueries({ queryKey: qk.team(boardId) });
     } catch (err) {
@@ -231,7 +222,6 @@ function GitHubImportPanel({ boardId }: { boardId: string }) {
   );
 }
 
-// ─── Empty state ───────────────────────────────────────────────────────
 function EmptyState() {
   return (
     <div className="flex min-h-[40vh] flex-col items-center justify-center gap-4 text-center">
@@ -250,7 +240,6 @@ function EmptyState() {
   );
 }
 
-// ─── Preview card ──────────────────────────────────────────────────────
 function PreviewCard({
   preview,
   board,
@@ -401,7 +390,6 @@ function PreviewCard({
   );
 }
 
-// ─── Importing card ────────────────────────────────────────────────────
 function ImportingCard({ repo, newCount }: { repo: string; newCount: number }) {
   return (
     <Card className="gap-0 py-0">
@@ -420,7 +408,6 @@ function ImportingCard({ repo, newCount }: { repo: string; newCount: number }) {
   );
 }
 
-// ─── Imported (success) card ───────────────────────────────────────────
 function ImportedCard({
   result,
   onViewBoard,

@@ -8,12 +8,6 @@ import type { TeamMemberStats } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/boards/[id]/team — return TeamMemberStats[].
-// For each board member computes:
-//   - inProgressCount: cards in non-done columns currently assigned
-//   - completedThisSprint: completed cards (done column, completedAt set)
-//     since sprintStart (or last 14 days if no sprint)
-//   - labelSpecialisation: top labels from completed CardHistory rows
 export async function GET(
   _req: NextRequest,
   ctx: { params: Promise<{ id: string }> },
@@ -38,7 +32,6 @@ export async function GET(
     ? board.sprintStart
     : new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
 
-  // Parallelize the per-member queries.
   const stats: TeamMemberStats[] = await Promise.all(
     board.members.map(async (m) => {
       const user = toUserDTO(m.user);
@@ -70,7 +63,6 @@ export async function GET(
           }),
         ]);
 
-      // Aggregate label names from completed history.
       const labelCounts = new Map<string, number>();
       for (const h of completedHistory) {
         if (!h.labelNames) continue;

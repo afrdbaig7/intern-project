@@ -1,6 +1,3 @@
-// Shared TypeScript types used across the Next.js app, Socket.IO service, and AI engine.
-
-// ─── Entity Types ────────────────────────────────────────────────
 export interface UserDTO {
   id: string
   name: string
@@ -52,7 +49,6 @@ export interface CardDTO {
   assignee: UserDTO | null
   creator: UserDTO | null
   labels: LabelDTO[]
-  // Time tracking (bonus): cached total logged seconds + active timer marker.
   timeLoggedSec: number
   timerStartedAt: string | null
   createdAt: string
@@ -60,13 +56,11 @@ export interface CardDTO {
   completedAt: string | null
 }
 
-// ─── Dependency Mapping (bonus) ─────────────────────────────────
 export interface CardDependenciesDTO {
   blockers: CardDTO[] // cards that block this card
   blocked: CardDTO[] // cards this card is blocking
 }
 
-// ─── Time Tracking (bonus) ──────────────────────────────────────
 export interface TimeEntryDTO {
   id: string
   cardId: string
@@ -133,7 +127,6 @@ export interface BoardDetailDTO extends BoardDTO {
   cards: CardDTO[]
 }
 
-// ─── AI Types ────────────────────────────────────────────────────
 export type InsightType = "bottleneck" | "sprint_risk" | "complexity" | "assignment" | "digest"
 
 export interface AIInsightDTO {
@@ -173,9 +166,7 @@ export interface TeamMemberStats {
   labelSpecialisation: { label: string; count: number }[]
 }
 
-// ─── Socket Events ───────────────────────────────────────────────
 export const SOCKET_EVENTS = {
-  // Client -> Server
   BOARD_JOIN: "board:join",
   BOARD_LEAVE: "board:leave",
   CARD_CREATE: "card:create",
@@ -188,7 +179,6 @@ export const SOCKET_EVENTS = {
   AI_RUN: "ai:run",
   AI_SUBSCRIBE: "ai:subscribe",
 
-  // Server -> Client
   CARD_CREATED: "card:created",
   CARD_UPDATED: "card:updated",
   CARD_MOVED: "card:moved",
@@ -205,7 +195,6 @@ export const SOCKET_EVENTS = {
   ERROR: "error",
 } as const
 
-// ─── Socket Payloads ─────────────────────────────────────────────
 export interface SocketUser {
   id: string
   name: string
@@ -233,7 +222,6 @@ export interface CardCreatePayload {
 export interface CardUpdatePayload {
   boardId: string
   cardId: string
-  // optimistic concurrency: client sends the version it last saw
   expectedVersion: number
   patch: Partial<{
     title: string
@@ -269,7 +257,6 @@ export interface CommentCreatePayload {
   user: SocketUser
 }
 
-// conflict notification (last-write-wins with visible warning)
 export interface ConflictNotification {
   cardId: string
   cardTitle: string
@@ -282,7 +269,6 @@ export interface ConflictNotification {
   serverValue: unknown
 }
 
-// ─── AI Engine Types ─────────────────────────────────────────────
 export interface BottleneckResult {
   /** "column" = column-accumulation bottleneck, "dependency" = single-card chain root. */
   kind?: "column" | "dependency";
@@ -323,7 +309,6 @@ export interface AssignmentSuggestion {
   reasons: string[]
 }
 
-// ─── GitHub Import Types ─────────────────────────────────────────
 export interface GitHubIssue {
   number: number
   title: string
@@ -343,7 +328,6 @@ export interface GitHubImportPreview {
   existingCount: number
 }
 
-// ─── Board Templates (bonus) ─────────────────────────────────────
 export interface BoardTemplate {
   id: string
   name: string

@@ -13,10 +13,6 @@ import { err, parseBody } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// POST /api/auth/login
-// Body: { email, password }
-// Verifies the password against the stored bcrypt hash, then sets an httpOnly
-// cookie `kb_user=<userId>` (7 days) and returns { user: UserDTO }.
 export async function POST(req: NextRequest) {
   const body = await parseBody<{ email?: string; password?: string }>(req);
   const email = (body.email ?? "").trim().toLowerCase();

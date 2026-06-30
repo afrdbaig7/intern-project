@@ -1,8 +1,3 @@
-// Complexity inference — pure heuristic, no external LLM.
-//
-// Predicts a 1-5 story-point estimate from description length, keyword
-// signals, label semantics, and a "learning" blend against past completed
-// cards with similar label sets (Jaccard similarity > 0.3).
 
 import { PrismaClient } from "@prisma/client";
 import type { ComplexityResult } from "../types";
@@ -13,7 +8,6 @@ export interface InferComplexityInput {
   labelNames: string[];
 }
 
-// ── Keyword groups (each group applies its adjustment once) ──────────
 const HIGH_RISK_KEYWORDS = [
   "refactor",
   "migrate",
@@ -81,7 +75,6 @@ export async function inferComplexity(
   const descLen = description.length;
   const reasons: string[] = [];
 
-  // ── 1. Base score from description length ──
   let base: number;
   let descLenFactor: number; // 0.2..1.0, used later for confidence
   if (descLen < 50) {
@@ -106,7 +99,6 @@ export async function inferComplexity(
     reasons.push("Description is very long");
   }
 
-  // ── 2. Keyword adjustments (one per group) ──
   let highHit: string | null = null;
   for (const kw of HIGH_RISK_KEYWORDS) {
     if (text.includes(kw)) {
@@ -143,7 +135,6 @@ export async function inferComplexity(
     reasons.push(`Contains keyword '${lowHit}' (-1)`);
   }
 
-  // ── 3. Label adjustments ──
   for (const label of labelNames.map((l) => l.toLowerCase())) {
     const adj = LABEL_ADJUST[label];
     if (adj === undefined) continue;
@@ -152,7 +143,6 @@ export async function inferComplexity(
     reasons.push(`Label '${label}' ${sign}`);
   }
 
-  // ── 4. Cross-reference CardHistory: learn from similar past cards ──
   const history = await db.cardHistory.findMany({
     where: { boardId, action: "completed" },
     select: { labelNames: true, complexity: true },
@@ -182,13 +172,11 @@ export async function inferComplexity(
     );
   }
 
-  // ── Blend 50/50 with heuristic score (clamp to [1,5]) ──
   const heuristicScore = clamp(base, 1, 5);
   const blended =
     historyAvg > 0 ? (heuristicScore + historyAvg) / 2 : heuristicScore;
   const complexity = clamp(Math.round(blended), 1, 5);
 
-  // ── 5. Confidence ──
   const confidence = clamp(
     0.5 + 0.3 * (similarComplexities.length / 5) + 0.2 * descLenFactor,
     0,

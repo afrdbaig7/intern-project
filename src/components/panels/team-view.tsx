@@ -16,7 +16,6 @@ import { emitAIRun } from "@/lib/socket";
 import { qk } from "@/store/app-store";
 import type { TeamMemberStats } from "@/lib/types";
 
-// Consistent label color from a string hash → hsl hue.
 function hashToHue(name: string): number {
   return Array.from(name).reduce((a, c) => a + c.charCodeAt(0), 0) % 360;
 }
@@ -106,7 +105,6 @@ function TeamView({ boardId }: { boardId: string }) {
   );
 }
 
-// ─── Member card ───────────────────────────────────────────────────────
 function MemberCard({
   member,
   maxInProgress,
@@ -191,7 +189,6 @@ function MemberCard({
   );
 }
 
-// ─── Small summary pill ────────────────────────────────────────────────
 function SummaryPill({
   label,
   value,
@@ -220,7 +217,6 @@ function SummaryPill({
   );
 }
 
-// ─── Hook: trigger AI run ──────────────────────────────────────────────
 function useRunAI(boardId: string) {
   const [running, setRunning] = useState(false);
   return {
@@ -232,16 +228,13 @@ function useRunAI(boardId: string) {
         emitAIRun(boardId);
         await api.runAI(boardId);
       } catch {
-        // socket path will still fire; ignore REST fallback error
       } finally {
-        // Brief cooldown so the user sees the spinner even on fast responses
         setTimeout(() => setRunning(false), 2500);
       }
     },
   };
 }
 
-// ─── Loading / error / empty states ────────────────────────────────────
 function TeamSkeleton() {
   return (
     <div className="space-y-6">

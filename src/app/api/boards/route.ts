@@ -11,8 +11,6 @@ import { err, getUser, ok, parseBody } from "@/lib/api-helpers";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// GET /api/boards — list all boards with members (no cards).
-// Returns BoardDTO[].
 export async function GET() {
   const boards = await db.board.findMany({
     include: BOARD_INCLUDE,
@@ -21,11 +19,6 @@ export async function GET() {
   return ok(boards.map(toBoardDTO));
 }
 
-// POST /api/boards — create a board.
-// Body: { name, description?, templateId? }
-// If templateId matches BOARD_TEMPLATES, instantiate the template's columns,
-// labels, and sample cards. Otherwise create a default 4-column board.
-// Returns the full BoardDTO.
 export async function POST(req: NextRequest) {
   const [user, authErr] = await getUser(req);
   if (authErr) return authErr;
@@ -47,7 +40,6 @@ export async function POST(req: NextRequest) {
       ? (BOARD_TEMPLATES.find((t) => t.id === templateId) as BoardTemplate)
       : null;
 
-  // Build the board + columns + labels + sample cards in one transaction.
   const board = await db.$transaction(async (tx) => {
     const board = await tx.board.create({
       data: {
@@ -57,12 +49,10 @@ export async function POST(req: NextRequest) {
       },
     });
 
-    // Owner membership for the current user.
     await tx.boardMember.create({
       data: { boardId: board.id, userId: user.id, role: "owner" },
     });
 
-    // Columns
     const columnDefs = template
       ? template.columns.map((c, i) => ({
           name: c.name,
@@ -83,7 +73,6 @@ export async function POST(req: NextRequest) {
       ),
     );
 
-    // Labels
     const labelDefs = template
       ? template.labels.map((l) => ({ name: l.name, color: l.color }))
       : [
@@ -97,7 +86,6 @@ export async function POST(req: NextRequest) {
       ),
     );
 
-    // Sample cards (template only)
     if (template?.sampleCards?.length) {
       await Promise.all(
         template.sampleCards.map((sc, i) =>
@@ -133,7 +121,6 @@ export async function POST(req: NextRequest) {
     return board;
   });
 
-  // Reload with relations for the response.
   const full = await db.board.findUnique({
     where: { id: board.id },
     include: BOARD_INCLUDE,

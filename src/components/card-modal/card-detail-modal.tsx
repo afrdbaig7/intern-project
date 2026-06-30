@@ -112,7 +112,6 @@ export function CardDetailModal({ cardId }: CardDetailModalProps) {
   );
 }
 
-// ─── Body ───────────────────────────────────────────────────────────
 function CardDetailBody({ cardId }: { cardId: string }) {
   const user = useAppStore((s) => s.user);
   const currentBoardId = useAppStore((s) => s.currentBoardId);
@@ -138,7 +137,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
     enabled: !!currentBoardId,
   });
 
-  // ── Typing indicator ────────────────────────────────────────────
   const [typingUsers, setTypingUsers] = React.useState<Map<string, { name: string; at: number }>>(
     new Map(),
   );
@@ -168,7 +166,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
     };
   }, [cardId, user]);
 
-  // Auto-clear typing entries older than 3s.
   React.useEffect(() => {
     const i = setInterval(() => {
       const cutoff = Date.now() - 3000;
@@ -188,7 +185,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
     return () => clearInterval(i);
   }, []);
 
-  // ── Helpers ─────────────────────────────────────────────────────
   const toSocketUser = React.useCallback(
     (): SocketUser | null =>
       user ? { id: user.id, name: user.name, avatarColor: user.avatarColor } : null,
@@ -206,7 +202,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
         patch,
         editor,
       });
-      // Optimistic local card update; server will broadcast back.
       queryClient.setQueryData<CardDTO | undefined>(qk.card(cardId), (old) =>
         old ? { ...old, ...patch, version: old.version + 1 } : old,
       );
@@ -328,7 +323,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
                             .filter((x) => x.id !== l.id)
                             .map((x) => x.id);
                           emitPatch({ labelIds: next });
-                          // Optimistic label removal on the cache
                           queryClient.setQueryData<CardDTO | undefined>(
                             qk.card(cardId),
                             (old) =>
@@ -562,8 +556,6 @@ function CardDetailBody({ cardId }: { cardId: string }) {
     </>
   );
 }
-
-// ─── Sub-components ─────────────────────────────────────────────────
 
 function SectionLabel({
   icon: Icon,
@@ -1087,8 +1079,6 @@ function ModalSkeleton() {
   );
 }
 
-// ─── Bonus: Dependency Mapping ────────────────────────────────────────
-
 /** Format a total-seconds value as "Xh Ym" / "Ym" / "0m". */
 function formatDuration(totalSec: number): string {
   const s = Math.max(0, Math.floor(totalSec));
@@ -1124,8 +1114,6 @@ function DependenciesSection({ cardId }: { cardId: string }) {
   const blockers = deps?.blockers ?? [];
   const blocked = deps?.blocked ?? [];
 
-  // Cards that can be added as blockers: same board, not in a done column,
-  // not the current card, not already a blocker.
   const doneColIds = React.useMemo(
     () =>
       new Set((boardQuery.data?.columns ?? []).filter((c) => c.isDone).map((c) => c.id)),
@@ -1144,8 +1132,6 @@ function DependenciesSection({ cardId }: { cardId: string }) {
     try {
       await api.addBlocker(cardId, blockerId);
       await queryClient.invalidateQueries({ queryKey: qk.cardDependencies(cardId) });
-      // The blocked card's version also bumped server-side; refetch the card
-      // + board caches so the board stays in sync.
       await queryClient.invalidateQueries({ queryKey: qk.card(cardId) });
       if (currentBoardId) {
         await queryClient.invalidateQueries({ queryKey: qk.fullBoard(currentBoardId) });
@@ -1316,8 +1302,6 @@ function DependenciesSection({ cardId }: { cardId: string }) {
   );
 }
 
-// ─── Bonus: Time Tracking ─────────────────────────────────────────────
-
 function TimeTrackingSection({
   cardId,
   card,
@@ -1332,7 +1316,6 @@ function TimeTrackingSection({
   const timeQuery = useQuery({
     queryKey: qk.cardTime(cardId),
     queryFn: () => api.cardTime(cardId),
-    // Always refetch on focus — timers change while the modal is open.
     refetchOnWindowFocus: true,
     staleTime: 0,
   });
@@ -1340,8 +1323,6 @@ function TimeTrackingSection({
   const [busy, setBusy] = React.useState<"start" | "stop" | null>(null);
   const [entriesOpen, setEntriesOpen] = React.useState(false);
 
-  // Live elapsed time while a timer is running. The server gives us
-  // `startedAt`; we tick locally every second so the UI feels live.
   const state: CardTimeStateDTO | undefined = timeQuery.data;
   const running = state?.running ?? !!card.timerStartedAt;
   const startedAt = state?.startedAt ?? card.timerStartedAt;
@@ -1358,9 +1339,6 @@ function TimeTrackingSection({
     : 0;
   const totalSec = (state?.totalSec ?? card.timeLoggedSec ?? 0);
 
-  // Show the cached total + the live seconds of the in-flight timer (the
-  // server already includes liveSec in `totalSec`, but if the query is
-  // stale we still want the ticking number to be visible).
   const displaySec = running ? (card.timeLoggedSec ?? 0) + liveSec : totalSec;
 
   const onStart = async () => {
@@ -1487,8 +1465,6 @@ function TimeTrackingSection({
                     user={{
                       name: e.userName,
                       avatarColor:
-                        // Best-effort deterministic colour when we don't have
-                        // the user's full DTO here.
                         `hsl(${(Array.from(e.userName).reduce(
                           (a, c) => a + c.charCodeAt(0),
                           0,
@@ -1519,7 +1495,6 @@ function TimeTrackingSection({
   );
 }
 
-// ─── Hooks ──────────────────────────────────────────────────────────
 function useThrottledTyping(
   boardId: string | null,
   cardId: string,

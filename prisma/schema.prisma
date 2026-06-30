@@ -1,5 +1,3 @@
-// Real-Time Collaborative Kanban with Autonomous AI Project Manager
-// Database schema. SQLite is used locally (persists across server restarts).
 
 generator client {
   provider = "prisma-client-js"
@@ -10,7 +8,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ─── Users & Team ────────────────────────────────────────────────
 model User {
   id              String   @id @default(cuid())
   email           String   @unique
@@ -42,7 +39,6 @@ model BoardMember {
   @@unique([boardId, userId])
 }
 
-// ─── Boards & Columns ────────────────────────────────────────────
 model Board {
   id            String   @id @default(cuid())
   name          String
@@ -78,7 +74,6 @@ model Column {
   @@index([boardId])
 }
 
-// ─── Cards ───────────────────────────────────────────────────────
 model Card {
   id                  String    @id @default(cuid())
   boardId             String
@@ -92,16 +87,13 @@ model Card {
   githubIssueNumber   Int?
   githubRepo          String?   // "owner/repo"
   sourceUrl           String?   // for chrome-extension clips
-  // optimistic concurrency control: version bumps on every write
   version             Int       @default(1)
-  // last editor info for last-write-wins conflict notifications
   lastEditedBy        String?
   lastEditedAt        DateTime?
 
   assigneeId String?
   creatorId  String?
 
-  // Time tracking (bonus): cached total seconds logged + active timer marker.
   timeLoggedSec   Int       @default(0)
   timerStartedAt  DateTime?
 
@@ -150,7 +142,6 @@ model CardLabel {
   @@id([cardId, labelId])
 }
 
-// ─── Comments & Activity ─────────────────────────────────────────
 model Comment {
   id        String   @id @default(cuid())
   cardId    String
@@ -181,7 +172,6 @@ model Activity {
   @@index([cardId])
 }
 
-// ─── Dependencies (bonus) ────────────────────────────────────────
 model CardDependency {
   id           String @id @default(cuid())
   blockerId    String
@@ -194,7 +184,6 @@ model CardDependency {
   @@unique([blockerId, blockedId])
 }
 
-// ─── Time Tracking (bonus) ───────────────────────────────────────
 model TimeEntry {
   id          String    @id @default(cuid())
   cardId      String
@@ -211,7 +200,6 @@ model TimeEntry {
   @@index([userId])
 }
 
-// ─── AI ──────────────────────────────────────────────────────────
 model AIInsight {
   id        String   @id @default(cuid())
   boardId   String
@@ -242,7 +230,6 @@ model Digest {
   @@index([boardId, weekStart])
 }
 
-// ─── Card history (training data for AI heuristics) ──────────────
 model CardHistory {
   id                 String   @id @default(cuid())
   cardId             String

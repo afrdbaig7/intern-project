@@ -71,7 +71,6 @@ export function Sidebar() {
   return <DesktopSidebar />;
 }
 
-// ─── Desktop ────────────────────────────────────────────────────────
 function DesktopSidebar() {
   const currentBoardId = useAppStore((s) => s.currentBoardId);
   const setCurrentBoardId = useAppStore((s) => s.setCurrentBoardId);
@@ -324,7 +323,6 @@ function DesktopSidebar() {
   );
 }
 
-// ─── Mobile (Sheet drawer) ──────────────────────────────────────────
 function MobileSidebar() {
   const currentBoardId = useAppStore((s) => s.currentBoardId);
   const setCurrentBoardId = useAppStore((s) => s.setCurrentBoardId);
@@ -457,7 +455,6 @@ function MobileSidebar() {
   );
 }
 
-// ─── New board dialog ───────────────────────────────────────────────
 function NewBoardDialog({
   open,
   onOpenChange,

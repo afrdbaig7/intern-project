@@ -8,16 +8,6 @@ import type { GitHubImportPreview, GitHubIssue } from "@/lib/types";
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
-// POST /api/github/preview — fetch open issues for a repo and compute
-// newCount / existingCount against the target board.
-// Body: { repo, boardId? }
-//
-// repo can be "owner/name", "https://github.com/owner/name",
-// "https://github.com/owner/name/issues", etc.
-//
-// If boardId is provided, we check existing cards (githubRepo + githubIssueNumber)
-// to compute newCount vs existingCount. Otherwise newCount = totalIssues and
-// existingCount = 0.
 export async function POST(req: NextRequest) {
   const body = await parseBody<{ repo?: string; boardId?: string }>(req);
   const repoInput = (body.repo ?? "").trim();
