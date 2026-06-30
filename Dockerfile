@@ -16,32 +16,23 @@ RUN bun install
 # Copy source
 COPY . .
 
-# Generate Prisma client and build Next.js
+# Set DATABASE_URL for Prisma
 ENV DATABASE_URL="file:/app/db/custom.db"
+
+# Generate Prisma client and build Next.js
 RUN bun run db:generate
 RUN bun run build
 
-# Expose Railway's default port
-EXPOSE 8080
-ENV PORT=3000
-
-# Fix ports: Next.js on 3000, Socket on 3003, Caddy on Railway's $PORT
-# Generate a new Caddyfile that correctly proxies Next.js and Socket.io
-RUN echo '{ \n\
-    http_port {$PORT} \n\
-} \n\
-:{$PORT} { \n\
-    handle /socket.io/* { \n\
-        reverse_proxy localhost:3003 \n\
-    } \n\
-    handle { \n\
-        reverse_proxy localhost:3000 \n\
-    } \n\
-}' > Caddyfile
-
-# Generate database schema (creates the SQLite file)
+# Create database and seed
 RUN bun run db:push
 RUN bun run db:seed
 
-# Railway injects $PORT. We force Next.js to 3000 so it doesn't steal $PORT from Caddy
-CMD PORT=3000 bun run start & bun run socket & caddy run --config Caddyfile --adapter caddyfile
+# Copy static files into standalone output
+RUN cp -r .next/static .next/standalone/.next/ && cp -r public .next/standalone/
+
+# Make entrypoint executable
+RUN chmod +x docker-entrypoint.sh
+
+EXPOSE 8080
+
+CMD ["sh", "docker-entrypoint.sh"]
