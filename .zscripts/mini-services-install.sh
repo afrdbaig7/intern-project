@@ -1,7 +1,7 @@
 #!/bin/bash
 
-# Configuration
-ROOT_DIR="/home/z/my-project/mini-services"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ROOT_DIR="$(cd "$SCRIPT_DIR/../mini-services" && pwd)"
 
 main() {
     echo "🚀 Starting batch dependency installation..."

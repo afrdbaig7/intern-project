@@ -5,8 +5,7 @@ exec 2>&1
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
-NEXTJS_PROJECT_DIR="/home/z/my-project"
+NEXTJS_PROJECT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 if [ ! -d "$NEXTJS_PROJECT_DIR" ]; then
     echo "❌ Error: Next.js project directory not found: $NEXTJS_PROJECT_DIR"
