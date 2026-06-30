@@ -20,8 +20,10 @@ async function main() {
       { name: "Ananya Iyer", email: "ananya@kanban.ai", githubUsername: "ananyaiyer" },
       { name: "Vikram Reddy", email: "vikram@kanban.ai", githubUsername: "vikramreddy" },
     ].map((u, i) =>
-      db.user.create({
-        data: { ...u, avatarColor: COLORS[i % COLORS.length], passwordHash: DEMO_PASSWORD_HASH },
+      db.user.upsert({
+        where: { email: u.email },
+        update: {},
+        create: { ...u, avatarColor: COLORS[i % COLORS.length], passwordHash: DEMO_PASSWORD_HASH },
       })
     )
   );
