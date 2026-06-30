@@ -8,6 +8,8 @@ import {
   Github,
   Link as LinkIcon,
   CalendarClock,
+  Clock,
+  Timer,
 } from "lucide-react";
 import type { CardDTO, UserDTO } from "@/lib/types";
 import { useAppStore } from "@/store/app-store";
@@ -217,6 +219,37 @@ export function CardItem({ card, isDragging }: CardItemProps) {
             </Tooltip>
           )}
 
+          {card.timerStartedAt && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-0.5 text-emerald-600 dark:text-emerald-400">
+                  <Clock className="size-3 animate-pulse" />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                Timer running since{" "}
+                {new Date(card.timerStartedAt).toLocaleTimeString(undefined, {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </TooltipContent>
+            </Tooltip>
+          )}
+
+          {card.timeLoggedSec > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className="flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                  <Timer className="size-3" />
+                  {formatMinutes(card.timeLoggedSec)}
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" className="text-xs">
+                {formatDurationFull(card.timeLoggedSec)} logged
+              </TooltipContent>
+            </Tooltip>
+          )}
+
           <div className="ml-auto flex items-center gap-1">
             {card.completedAt && (
               <span className="size-2 rounded-full bg-emerald-500" title="Done" />
@@ -227,6 +260,23 @@ export function CardItem({ card, isDragging }: CardItemProps) {
       </motion.div>
     </TooltipProvider>
   );
+}
+
+/** Compact "Xm" / "Xh" badge label for the card-item time-logged chip. */
+function formatMinutes(totalSec: number): string {
+  const m = Math.floor(totalSec / 60);
+  if (m < 60) return `${m}m`;
+  const h = Math.floor(m / 60);
+  return `${h}h`;
+}
+
+/** Full "Xh Ym" string for the tooltip. */
+function formatDurationFull(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
 }
 
 /** Read-only card preview rendered inside the DragOverlay. */

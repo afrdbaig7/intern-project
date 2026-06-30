@@ -19,6 +19,13 @@ import {
   Tag,
   History,
   AlertTriangle,
+  Clock,
+  Play,
+  Square,
+  GitBranch,
+  ChevronDown,
+  ChevronRight,
+  ArrowUpRight,
 } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import {
@@ -35,6 +42,8 @@ import { useAppStore, qk } from "@/store/app-store";
 import type {
   ActivityDTO,
   CardDTO,
+  CardDependenciesDTO,
+  CardTimeStateDTO,
   CommentDTO,
   SocketUser,
   UserDTO,
@@ -63,6 +72,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 
@@ -489,6 +511,10 @@ function CardDetailBody({ cardId }: { cardId: string }) {
                   className="mt-2 h-8 text-xs"
                 />
               </div>
+
+              <DependenciesSection cardId={cardId} />
+
+              <TimeTrackingSection cardId={cardId} card={card} />
 
               {card.githubRepo && card.githubIssueNumber !== null && (
                 <div>
@@ -1057,6 +1083,438 @@ function ModalSkeleton() {
         <Skeleton className="h-4 w-1/2" />
         <Skeleton className="h-20 w-full" />
       </div>
+    </div>
+  );
+}
+
+// ─── Bonus: Dependency Mapping ────────────────────────────────────────
+
+/** Format a total-seconds value as "Xh Ym" / "Ym" / "0m". */
+function formatDuration(totalSec: number): string {
+  const s = Math.max(0, Math.floor(totalSec));
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
+
+function DependenciesSection({ cardId }: { cardId: string }) {
+  const queryClient = useQueryClient();
+  const selectCard = useAppStore((s) => s.selectCard);
+  const currentBoardId = useAppStore((s) => s.currentBoardId);
+
+  const depsQuery = useQuery({
+    queryKey: qk.cardDependencies(cardId),
+    queryFn: () => api.cardDependencies(cardId),
+    staleTime: 5_000,
+  });
+
+  const boardQuery = useQuery({
+    queryKey: currentBoardId ? qk.fullBoard(currentBoardId) : ["board", "noop"],
+    queryFn: () =>
+      currentBoardId ? api.getFullBoard(currentBoardId) : Promise.reject(),
+    enabled: !!currentBoardId,
+  });
+
+  const [pickerOpen, setPickerOpen] = React.useState(false);
+  const [pendingAdd, setPendingAdd] = React.useState<string | null>(null);
+  const [pendingRemove, setPendingRemove] = React.useState<string | null>(null);
+
+  const deps = depsQuery.data;
+  const blockers = deps?.blockers ?? [];
+  const blocked = deps?.blocked ?? [];
+
+  // Cards that can be added as blockers: same board, not in a done column,
+  // not the current card, not already a blocker.
+  const doneColIds = React.useMemo(
+    () =>
+      new Set((boardQuery.data?.columns ?? []).filter((c) => c.isDone).map((c) => c.id)),
+    [boardQuery.data],
+  );
+  const candidateBlockers = React.useMemo(() => {
+    const existing = new Set(blockers.map((b) => b.id));
+    return (boardQuery.data?.cards ?? [])
+      .filter((c) => c.id !== cardId)
+      .filter((c) => !doneColIds.has(c.columnId))
+      .filter((c) => !existing.has(c.id));
+  }, [boardQuery.data, blockers, cardId, doneColIds]);
+
+  const onAdd = async (blockerId: string) => {
+    setPendingAdd(blockerId);
+    try {
+      await api.addBlocker(cardId, blockerId);
+      await queryClient.invalidateQueries({ queryKey: qk.cardDependencies(cardId) });
+      // The blocked card's version also bumped server-side; refetch the card
+      // + board caches so the board stays in sync.
+      await queryClient.invalidateQueries({ queryKey: qk.card(cardId) });
+      if (currentBoardId) {
+        await queryClient.invalidateQueries({ queryKey: qk.fullBoard(currentBoardId) });
+      }
+      toast.success("Blocker added");
+      setPickerOpen(false);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to add blocker");
+    } finally {
+      setPendingAdd(null);
+    }
+  };
+
+  const onRemove = async (blockerId: string) => {
+    setPendingRemove(blockerId);
+    try {
+      await api.removeBlocker(cardId, blockerId);
+      await queryClient.invalidateQueries({ queryKey: qk.cardDependencies(cardId) });
+      await queryClient.invalidateQueries({ queryKey: qk.card(cardId) });
+      if (currentBoardId) {
+        await queryClient.invalidateQueries({ queryKey: qk.fullBoard(currentBoardId) });
+      }
+      toast.success("Blocker removed");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to remove blocker");
+    } finally {
+      setPendingRemove(null);
+    }
+  };
+
+  return (
+    <div>
+      <div className="flex items-center justify-between">
+        <SectionLabel icon={GitBranch}>Dependencies</SectionLabel>
+        {blocked.length > 2 && (
+          <Badge
+            variant="secondary"
+            className="gap-1 border-amber-500/30 bg-amber-500/10 text-[10px] text-amber-700 dark:text-amber-300"
+            title={`This card blocks ${blocked.length} downstream tasks`}
+          >
+            <AlertTriangle className="size-3" />
+            Blocks {blocked.length} cards
+          </Badge>
+        )}
+      </div>
+
+      <div className="mt-2 space-y-2.5">
+        {/* Blocked by (blockers) */}
+        <div>
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+            Blocked by ({blockers.length})
+          </div>
+          {blockers.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Nothing blocking this card.</div>
+          ) : (
+            <ul className="space-y-1">
+              {blockers.map((b) => (
+                <li
+                  key={b.id}
+                  className="group flex items-center gap-1 rounded-md border border-border/60 bg-background/50 px-2 py-1"
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectCard(b.id)}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-xs hover:text-emerald-600 dark:hover:text-emerald-400"
+                    title={`Open "${b.title}"`}
+                  >
+                    <span className="truncate">{b.title}</span>
+                    <ArrowUpRight className="size-3 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                  </button>
+                  <button
+                    type="button"
+                    aria-label={`Remove blocker ${b.title}`}
+                    disabled={pendingRemove === b.id}
+                    onClick={() => onRemove(b.id)}
+                    className="shrink-0 rounded p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive disabled:opacity-50"
+                  >
+                    {pendingRemove === b.id ? (
+                      <Loader2 className="size-3 animate-spin" />
+                    ) : (
+                      <X className="size-3" />
+                    )}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Blocking (this card blocks these) */}
+        <div>
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">
+            Blocking ({blocked.length})
+          </div>
+          {blocked.length === 0 ? (
+            <div className="text-xs text-muted-foreground">Not blocking any cards.</div>
+          ) : (
+            <ul className="space-y-1">
+              {blocked.map((b) => (
+                <li
+                  key={b.id}
+                  className="group flex items-center gap-1 rounded-md border border-border/60 bg-background/50 px-2 py-1"
+                >
+                  <button
+                    type="button"
+                    onClick={() => selectCard(b.id)}
+                    className="flex min-w-0 flex-1 items-center gap-1 text-left text-xs hover:text-emerald-600 dark:hover:text-emerald-400"
+                    title={`Open "${b.title}"`}
+                  >
+                    <span className="truncate">{b.title}</span>
+                    <ArrowUpRight className="size-3 shrink-0 opacity-0 transition group-hover:opacity-100" />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        {/* Add blocker popover */}
+        <Popover open={pickerOpen} onOpenChange={setPickerOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 w-full gap-1 text-xs"
+              disabled={candidateBlockers.length === 0}
+            >
+              <Plus className="size-3.5" />
+              Add blocker
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-64 p-0">
+            <Command>
+              <CommandInput placeholder="Search cards…" />
+              <CommandList>
+                <CommandEmpty>No cards available to block with.</CommandEmpty>
+                <CommandGroup>
+                  {candidateBlockers.map((c) => (
+                    <CommandItem
+                      key={c.id}
+                      value={`${c.title} ${c.id}`}
+                      onSelect={() => onAdd(c.id)}
+                      disabled={pendingAdd !== null}
+                    >
+                      <span className="flex min-w-0 flex-1 items-center gap-2">
+                        <span
+                          className="size-2 shrink-0 rounded-full"
+                          style={{
+                            backgroundColor:
+                              boardQuery.data?.columns.find((col) => col.id === c.columnId)
+                                ?.color ?? "#64748b",
+                          }}
+                        />
+                        <span className="truncate text-sm">{c.title}</span>
+                      </span>
+                      {pendingAdd === c.id && (
+                        <Loader2 className="size-3 animate-spin text-muted-foreground" />
+                      )}
+                    </CommandItem>
+                  ))}
+                </CommandGroup>
+              </CommandList>
+            </Command>
+          </PopoverContent>
+        </Popover>
+      </div>
+    </div>
+  );
+}
+
+// ─── Bonus: Time Tracking ─────────────────────────────────────────────
+
+function TimeTrackingSection({
+  cardId,
+  card,
+}: {
+  cardId: string;
+  card: CardDTO;
+}) {
+  const queryClient = useQueryClient();
+  const user = useAppStore((s) => s.user);
+  const currentBoardId = useAppStore((s) => s.currentBoardId);
+
+  const timeQuery = useQuery({
+    queryKey: qk.cardTime(cardId),
+    queryFn: () => api.cardTime(cardId),
+    // Always refetch on focus — timers change while the modal is open.
+    refetchOnWindowFocus: true,
+    staleTime: 0,
+  });
+
+  const [busy, setBusy] = React.useState<"start" | "stop" | null>(null);
+  const [entriesOpen, setEntriesOpen] = React.useState(false);
+
+  // Live elapsed time while a timer is running. The server gives us
+  // `startedAt`; we tick locally every second so the UI feels live.
+  const state: CardTimeStateDTO | undefined = timeQuery.data;
+  const running = state?.running ?? !!card.timerStartedAt;
+  const startedAt = state?.startedAt ?? card.timerStartedAt;
+  const [now, setNow] = React.useState(() => Date.now());
+  React.useEffect(() => {
+    if (!running || !startedAt) return;
+    setNow(Date.now());
+    const i = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(i);
+  }, [running, startedAt]);
+
+  const liveSec = running && startedAt
+    ? Math.max(0, Math.floor((now - new Date(startedAt).getTime()) / 1000))
+    : 0;
+  const totalSec = (state?.totalSec ?? card.timeLoggedSec ?? 0);
+
+  // Show the cached total + the live seconds of the in-flight timer (the
+  // server already includes liveSec in `totalSec`, but if the query is
+  // stale we still want the ticking number to be visible).
+  const displaySec = running ? (card.timeLoggedSec ?? 0) + liveSec : totalSec;
+
+  const onStart = async () => {
+    if (!user) return;
+    setBusy("start");
+    try {
+      await api.startTimer(cardId, user.id);
+      await queryClient.invalidateQueries({ queryKey: qk.cardTime(cardId) });
+      await queryClient.invalidateQueries({ queryKey: qk.card(cardId) });
+      if (currentBoardId) {
+        await queryClient.invalidateQueries({ queryKey: qk.fullBoard(currentBoardId) });
+      }
+      toast.success("Timer started");
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to start timer");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const onStop = async () => {
+    if (!user) return;
+    setBusy("stop");
+    try {
+      await api.stopTimer(cardId, user.id);
+      await queryClient.invalidateQueries({ queryKey: qk.cardTime(cardId) });
+      await queryClient.invalidateQueries({ queryKey: qk.card(cardId) });
+      if (currentBoardId) {
+        await queryClient.invalidateQueries({ queryKey: qk.fullBoard(currentBoardId) });
+      }
+      toast.success(`Timer stopped — logged ${formatDuration(liveSec)}`);
+    } catch (err) {
+      toast.error(err instanceof ApiError ? err.message : "Failed to stop timer");
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  const entries = state?.entries ?? [];
+
+  return (
+    <div>
+      <SectionLabel icon={Clock}>Time tracking</SectionLabel>
+      <div className="mt-2 rounded-md border border-border/60 bg-background/50 p-2.5">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <div className="text-[11px] text-muted-foreground">Logged</div>
+            <div className="font-mono text-sm font-semibold tabular-nums">
+              {formatDuration(displaySec)}
+            </div>
+          </div>
+          {running ? (
+            <Button
+              size="sm"
+              onClick={onStop}
+              disabled={busy !== null}
+              className="h-7 gap-1 bg-red-500 text-xs text-white hover:bg-red-600"
+            >
+              {busy === "stop" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Square className="size-3.5" />
+              )}
+              Stop
+            </Button>
+          ) : (
+            <Button
+              size="sm"
+              onClick={onStart}
+              disabled={busy !== null || !user}
+              className="h-7 gap-1 bg-emerald-500 text-xs text-white hover:bg-emerald-600"
+            >
+              {busy === "start" ? (
+                <Loader2 className="size-3.5 animate-spin" />
+              ) : (
+                <Play className="size-3.5" />
+              )}
+              Start
+            </Button>
+          )}
+        </div>
+
+        {running && (
+          <div className="mt-1.5 flex items-center gap-1 text-[11px] text-emerald-600 dark:text-emerald-400">
+            <span className="relative flex size-1.5">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+              <span className="relative inline-flex size-1.5 rounded-full bg-emerald-500" />
+            </span>
+            <span className="font-mono tabular-nums">{formatDuration(liveSec)}</span>
+            <span className="opacity-70">running</span>
+          </div>
+        )}
+
+        {!user && (
+          <div className="mt-1.5 text-[10px] text-muted-foreground">
+            Sign in to track time.
+          </div>
+        )}
+      </div>
+
+      {entries.length > 0 && (
+        <Collapsible open={entriesOpen} onOpenChange={setEntriesOpen}>
+          <CollapsibleTrigger asChild>
+            <button
+              type="button"
+              className="mt-1 flex w-full items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+            >
+              {entriesOpen ? (
+                <ChevronDown className="size-3" />
+              ) : (
+                <ChevronRight className="size-3" />
+              )}
+              {entries.length} recent {entries.length === 1 ? "entry" : "entries"}
+            </button>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <ol className="mt-1.5 max-h-44 space-y-1.5 overflow-y-auto pr-1">
+              {entries.map((e) => (
+                <li
+                  key={e.id}
+                  className="flex items-center gap-2 rounded-md border border-border/40 px-2 py-1"
+                >
+                  <AvatarCircle
+                    user={{
+                      name: e.userName,
+                      avatarColor:
+                        // Best-effort deterministic colour when we don't have
+                        // the user's full DTO here.
+                        `hsl(${(Array.from(e.userName).reduce(
+                          (a, c) => a + c.charCodeAt(0),
+                          0,
+                        ) % 360)}, 60%, 50%)`,
+                    }}
+                    size={18}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[11px] font-medium">{e.userName}</div>
+                    <div className="text-[10px] text-muted-foreground">
+                      {e.endedAt
+                        ? formatDistanceToNow(new Date(e.endedAt), { addSuffix: true })
+                        : "running…"}
+                    </div>
+                  </div>
+                  <div className="shrink-0 font-mono text-[11px] tabular-nums text-muted-foreground">
+                    {e.durationSec !== null
+                      ? formatDuration(e.durationSec)
+                      : "—"}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          </CollapsibleContent>
+        </Collapsible>
+      )}
     </div>
   );
 }

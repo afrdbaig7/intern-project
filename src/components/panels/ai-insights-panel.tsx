@@ -442,6 +442,18 @@ function InsightMetadata({ insight }: { insight: AIInsightDTO }) {
 
   if (insight.type === "bottleneck") {
     const b = m as unknown as BottleneckResult;
+    if (b.kind === "dependency") {
+      return (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          <MetaChip
+            label="Blocks"
+            value={String(b.arrived)}
+            tone={b.severity === "critical" ? "red" : "amber"}
+          />
+          <MetaChip label="Column" value={b.columnName} tone="sky" />
+        </div>
+      );
+    }
     return (
       <div className="mt-2 flex flex-wrap gap-1.5">
         <MetaChip label="Arrived" value={String(b.arrived)} tone="amber" />

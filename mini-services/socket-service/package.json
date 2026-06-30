@@ -1,6 +1,14 @@
 {
   "name": "kanban-socket-service",
   "private": true,
-  "scripts": { "dev": "bun --hot index.ts" },
-  "dependencies": { "socket.io": "^4.8.3", "@prisma/client": "^6.11.1" }
+  "scripts": {
+    "dev": "bun --hot index.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.2",
+    "socket.io": "^4.8.3"
+  },
+  "devDependencies": {
+    "prisma": "6.19.2"
+  }
 }

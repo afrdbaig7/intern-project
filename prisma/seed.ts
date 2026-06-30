@@ -2,13 +2,19 @@
 // columns, labels, sample cards, and card history for AI heuristics.
 // Run with: bun run db:seed
 import { PrismaClient } from "@prisma/client";
+import bcrypt from "bcryptjs";
 
 const db = new PrismaClient();
+
+// All demo accounts share this password so graders can log in quickly.
+const DEMO_PASSWORD = "demo123";
+const DEMO_PASSWORD_HASH = bcrypt.hashSync(DEMO_PASSWORD, 10);
 
 const COLORS = ["#6366f1", "#ec4899", "#14b8a6", "#f59e0b", "#8b5cf6", "#ef4444", "#0ea5e9"];
 
 async function main() {
   console.log("🌱 Seeding database...");
+  console.log(`   Demo password for all seeded accounts: "${DEMO_PASSWORD}"`);
 
   // ── Users ──────────────────────────────────────────────────────
   const users = await Promise.all(
@@ -20,7 +26,7 @@ async function main() {
       { name: "Vikram Reddy", email: "vikram@kanban.ai", githubUsername: "vikramreddy" },
     ].map((u, i) =>
       db.user.create({
-        data: { ...u, avatarColor: COLORS[i % COLORS.length], passwordHash: "demo" },
+        data: { ...u, avatarColor: COLORS[i % COLORS.length], passwordHash: DEMO_PASSWORD_HASH },
       })
     )
   );

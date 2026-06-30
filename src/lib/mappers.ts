@@ -12,6 +12,7 @@ import type {
   Comment,
   Digest,
   Label,
+  TimeEntry,
   User,
 } from "@prisma/client";
 
@@ -23,12 +24,14 @@ import type {
   BoardDetailDTO,
   BoardMemberDTO,
   CardDTO,
+  CardTimeStateDTO,
   ColumnDTO,
   CommentDTO,
   DigestContent,
   DigestDTO,
   InsightType,
   LabelDTO,
+  TimeEntryDTO,
   UserDTO,
 } from "@/lib/types";
 
@@ -115,6 +118,8 @@ export function toCardDTO(c: CardWithRelations): CardDTO {
     assignee: c.assignee ? toUserDTO(c.assignee) : null,
     creator: c.creator ? toUserDTO(c.creator) : null,
     labels: c.labels.map((cl) => toLabelDTO(cl.label)),
+    timeLoggedSec: c.timeLoggedSec ?? 0,
+    timerStartedAt: c.timerStartedAt ? c.timerStartedAt.toISOString() : null,
     createdAt: c.createdAt.toISOString(),
     updatedAt: c.updatedAt.toISOString(),
     completedAt: c.completedAt ? c.completedAt.toISOString() : null,
@@ -245,3 +250,43 @@ export const BOARD_DETAIL_INCLUDE = {
   ...BOARD_INCLUDE,
   cards: { include: CARD_INCLUDE },
 } as const;
+
+// ─── Time Tracking (bonus) ─────────────────────────────────────────────────
+export type TimeEntryWithUser = TimeEntry & { user: User };
+
+export function toTimeEntryDTO(e: TimeEntryWithUser): TimeEntryDTO {
+  return {
+    id: e.id,
+    cardId: e.cardId,
+    userId: e.userId,
+    userName: e.user.name,
+    startedAt: e.startedAt.toISOString(),
+    endedAt: e.endedAt ? e.endedAt.toISOString() : null,
+    durationSec: e.durationSec,
+  };
+}
+
+/**
+ * Build the card-time-state payload returned by GET/PATCH /api/cards/[id]/time.
+ * `totalSec` includes the cached card.timeLoggedSec plus the live elapsed
+ * seconds of an in-flight timer (if `running` is true).
+ */
+export function buildCardTimeState(
+  card: { timeLoggedSec: number; timerStartedAt: Date | null },
+  entries: TimeEntryWithUser[],
+): CardTimeStateDTO {
+  const running =
+    !!card.timerStartedAt && card.timerStartedAt.getTime() <= Date.now();
+  const liveSec = running
+    ? Math.max(
+        0,
+        Math.floor((Date.now() - card.timerStartedAt!.getTime()) / 1000),
+      )
+    : 0;
+  return {
+    totalSec: (card.timeLoggedSec ?? 0) + liveSec,
+    running,
+    startedAt: card.timerStartedAt ? card.timerStartedAt.toISOString() : null,
+    entries: entries.map(toTimeEntryDTO),
+  };
+}

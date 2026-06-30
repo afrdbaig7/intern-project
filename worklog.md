@@ -635,3 +635,42 @@ Stage Summary:
   risk/complexity/assignment/digest), GitHub scraper (pagination + dedup), Chrome extension,
   polished UI across all 5 views. Persistence via SQLite. Lint clean.
 - Dev server + socket service started as the final step for the user's preview.
+
+---
+Task ID: 6
+Agent: orchestrator
+Task: Real signup/signin auth + bonus features (dependency mapping, time tracking)
+
+Work Log:
+- Installed bcryptjs + @types/bcryptjs.
+- Added hashPassword/verifyPassword/isValidEmail helpers to src/lib/auth.ts.
+- Created POST /api/auth/signup: validates name/email/password, bcrypt-hashes password,
+  creates user + a default Software Sprint board (columns + labels + 3 sample cards) in a
+  transaction, sets cookie, returns { user }.
+- Updated POST /api/auth/login to verify password against bcrypt hash (rejects wrong
+  passwords with 401). Returns { user: UserDTO }.
+- Updated seed to bcrypt-hash demo passwords (password = "demo123" for all demo accounts).
+- Migrated existing demo users' passwordHash in the current DB from "demo" to bcrypt hash.
+- Rewrote src/components/auth/login-screen.tsx: Sign In / Create account tabs, email +
+  password fields, show/hide password toggle, inline validation, collapsible "demo accounts"
+  quick-fill panel. Removed the user-grid click-to-login (replaced with proper forms).
+- Updated src/lib/api.ts: api.login(email, password) + api.signup(name, email, password).
+- Added CORS-friendly /api/auth/signup (already covered by existing middleware for /api/auth/*).
+- Bonus — Dependency mapping: API at /api/cards/[id]/dependencies (GET/POST/DELETE), card
+  modal "Dependencies" section with Blocked by / Blocking lists + Add blocker popover.
+  AI bottleneck detector enhanced to flag cards blocking ≥2 downstream tasks.
+- Bonus — Time tracking: added TimeEntry model + timeLoggedSec/timerStartedAt on Card.
+  API at /api/cards/[id]/time (GET/POST/PATCH for start/stop). Card modal "Time tracking"
+  section with live elapsed timer + recent entries expander. Card item shows running indicator.
+- Verified via agent-browser: signup creates user + board (Grace Hopper → "Grace's Sprint Board"
+  with 5 cols + 3 cards); demo login with password "demo123" works; card modal shows
+  Dependencies (Add blocker) + Time tracking (Start/Stop) sections; timer start→stop logs
+  time correctly; add/remove dependency works; AI insights still stream; no console errors.
+- Updated README: auth section now describes signup/signin with bcrypt + demo password;
+  Bonus section updated to reflect implemented dependency mapping + time tracking.
+
+Stage Summary:
+- Anyone with a standard email can now sign up and sign in (bcrypt-hashed passwords).
+- All required PDF features remain working. Two bonus features (dependency mapping, time
+  tracking) are fully implemented end-to-end (schema + API + UI + AI integration).
+- Lint clean. Dev server + socket service restarted for preview.

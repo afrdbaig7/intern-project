@@ -1,76 +1,87 @@
 "use client";
 
 import * as React from "react";
-import { motion } from "framer-motion";
-import { useQuery } from "@tanstack/react-query";
+import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Zap, Sparkles, Github, Loader2, LogIn, Mail } from "lucide-react";
+import {
+  Zap,
+  Sparkles,
+  Github,
+  Loader2,
+  LogIn,
+  Mail,
+  Lock,
+  User as UserIcon,
+  Eye,
+  EyeOff,
+} from "lucide-react";
 import { api, ApiError } from "@/lib/api";
-import { useAppStore, qk } from "@/store/app-store";
-import type { UserDTO } from "@/lib/types";
+import { useAppStore } from "@/store/app-store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 
-function UserAvatar({
-  user,
-  size = "md",
-}: {
-  user: Pick<UserDTO, "name" | "avatarColor">;
-  size?: "sm" | "md" | "lg";
-}) {
-  const dim =
-    size === "lg" ? "size-12 text-base" : size === "sm" ? "size-6 text-xs" : "size-9 text-sm";
-  return (
-    <div
-      className={`${dim} flex shrink-0 items-center justify-center rounded-full font-semibold text-white shadow-sm`}
-      style={{ backgroundColor: user.avatarColor }}
-      aria-hidden
-    >
-      {user.name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
+type Mode = "signin" | "signup";
 
 export function LoginScreen() {
   const setUser = useAppStore((s) => s.setUser);
+  const [mode, setMode] = React.useState<Mode>("signin");
+  const [name, setName] = React.useState("");
   const [email, setEmail] = React.useState("");
+  const [password, setPassword] = React.useState("");
+  const [showPassword, setShowPassword] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
-  const [loggingInId, setLoggingInId] = React.useState<string | null>(null);
+  const [showDemo, setShowDemo] = React.useState(false);
 
-  const usersQuery = useQuery({
-    queryKey: qk.users,
-    queryFn: api.users,
-  });
+  // Local validation errors (shown inline).
+  const [errors, setErrors] = React.useState<Record<string, string>>({});
 
-  const doLogin = React.useCallback(
-    async (loginEmail: string, name?: string) => {
-      if (!loginEmail.trim()) return;
-      setSubmitting(true);
-      try {
-        const { user } = await api.login(loginEmail.trim());
-        setUser(user);
-        toast.success(`Welcome, ${name ?? user.name}`);
-      } catch (err) {
-        const msg = err instanceof ApiError ? err.message : "Login failed";
-        toast.error(msg);
-      } finally {
-        setSubmitting(false);
-        setLoggingInId(null);
-      }
-    },
-    [setUser],
-  );
-
-  const onPickUser = (u: UserDTO) => {
-    setLoggingInId(u.id);
-    void doLogin(u.email, u.name);
+  const validate = (): boolean => {
+    const e: Record<string, string> = {};
+    if (mode === "signup" && name.trim().length < 2) {
+      e.name = "Please enter your name (at least 2 characters).";
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
+      e.email = "Please enter a valid email address.";
+    }
+    if (password.length < 6) {
+      e.password = "Password must be at least 6 characters.";
+    }
+    setErrors(e);
+    return Object.keys(e).length === 0;
   };
 
-  const onSubmitManual = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    void doLogin(email);
+    if (!validate()) return;
+    setSubmitting(true);
+    try {
+      const trimmedEmail = email.trim().toLowerCase();
+      const { user } =
+        mode === "signin"
+          ? await api.login(trimmedEmail, password)
+          : await api.signup(name.trim(), trimmedEmail, password);
+      setUser(user);
+      toast.success(
+        mode === "signup"
+          ? `Welcome to Kanban AI, ${user.name}!`
+          : `Welcome back, ${user.name}`,
+      );
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : "Something went wrong. Please try again.";
+      toast.error(msg);
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  // Quick-fill a demo account.
+  const fillDemo = (demoEmail: string) => {
+    setMode("signin");
+    setEmail(demoEmail);
+    setPassword("demo123");
+    setErrors({});
   };
 
   return (
@@ -107,21 +118,9 @@ export function LoginScreen() {
         {/* Feature highlights */}
         <div className="mb-8 grid w-full max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
           {[
-            {
-              icon: Zap,
-              title: "Real-time sync",
-              desc: "Live cursors, presence, drag-and-drop",
-            },
-            {
-              icon: Sparkles,
-              title: "AI insights",
-              desc: "Bottlenecks, risk, complexity, digests",
-            },
-            {
-              icon: Github,
-              title: "GitHub import",
-              desc: "Pull open issues into a board",
-            },
+            { icon: Zap, title: "Real-time sync", desc: "Live cursors, presence, drag-and-drop" },
+            { icon: Sparkles, title: "AI insights", desc: "Bottlenecks, risk, complexity, digests" },
+            { icon: Github, title: "GitHub import", desc: "Pull open issues into a board" },
           ].map((f) => (
             <div
               key={f.title}
@@ -138,84 +137,146 @@ export function LoginScreen() {
           ))}
         </div>
 
-        {/* Login card */}
-        <Card className="w-full max-w-2xl border-border/60 bg-card/70 backdrop-blur">
+        {/* Auth card */}
+        <Card className="w-full max-w-md border-border/60 bg-card/70 backdrop-blur">
           <CardContent className="p-6">
-            <div className="mb-4">
-              <h2 className="text-lg font-semibold">Choose an account</h2>
-              <p className="text-sm text-muted-foreground">
-                Pick a seeded user to sign in instantly. No password needed.
-              </p>
-            </div>
+            <Tabs value={mode} onValueChange={(v) => { setMode(v as Mode); setErrors({}); }}>
+              <TabsList className="grid w-full grid-cols-2">
+                <TabsTrigger value="signin">Sign in</TabsTrigger>
+                <TabsTrigger value="signup">Create account</TabsTrigger>
+              </TabsList>
 
-            {usersQuery.isLoading ? (
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                {Array.from({ length: 4 }).map((_, i) => (
-                  <Skeleton key={i} className="h-16 w-full" />
-                ))}
-              </div>
-            ) : usersQuery.isError ? (
-              <div className="rounded-lg border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
-                Couldn’t load users. {String(usersQuery.error?.message ?? "")}
-              </div>
-            ) : (
-              <div className="grid max-h-80 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2">
-                {(usersQuery.data ?? []).map((u) => (
-                  <button
-                    key={u.id}
-                    type="button"
-                    disabled={submitting}
-                    onClick={() => onPickUser(u)}
-                    className="group flex items-center gap-3 rounded-lg border border-border/60 bg-background/40 p-3 text-left transition hover:border-emerald-500/40 hover:bg-emerald-500/5 disabled:cursor-not-allowed disabled:opacity-60"
+              <TabsContent value="signin" className="mt-5">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Welcome back. Enter your credentials to continue.
+                </p>
+              </TabsContent>
+              <TabsContent value="signup" className="mt-5">
+                <p className="mb-4 text-sm text-muted-foreground">
+                  Create a free account. You&apos;ll get a board to start with right away.
+                </p>
+              </TabsContent>
+            </Tabs>
+
+            <form onSubmit={submit} className="space-y-3">
+              <AnimatePresence mode="popLayout">
+                {mode === "signup" && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
                   >
-                    <UserAvatar user={u} />
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{u.name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {u.email}
+                    <FieldShell label="Name" error={errors.name}>
+                      <div className="relative">
+                        <UserIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          type="text"
+                          placeholder="Jane Doe"
+                          value={name}
+                          onChange={(e) => setName(e.target.value)}
+                          className="pl-9"
+                          disabled={submitting}
+                          autoComplete="name"
+                        />
                       </div>
-                    </div>
-                    {loggingInId === u.id ? (
-                      <Loader2 className="size-4 animate-spin text-emerald-500" />
-                    ) : (
-                      <LogIn className="size-4 text-muted-foreground opacity-0 transition group-hover:opacity-100" />
-                    )}
+                    </FieldShell>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <FieldShell label="Email" error={errors.email}>
+                <div className="relative">
+                  <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="pl-9"
+                    disabled={submitting}
+                    autoComplete="email"
+                  />
+                </div>
+              </FieldShell>
+
+              <FieldShell label="Password" error={errors.password}>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    type={showPassword ? "text" : "password"}
+                    placeholder={mode === "signup" ? "At least 6 characters" : "Your password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-9 pr-9"
+                    disabled={submitting}
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((s) => !s)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition hover:text-foreground"
+                    tabIndex={-1}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                  >
+                    {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                   </button>
-                ))}
-              </div>
-            )}
+                </div>
+              </FieldShell>
 
-            <div className="my-5 flex items-center gap-3 text-xs text-muted-foreground">
-              <div className="h-px flex-1 bg-border" />
-              OR
-              <div className="h-px flex-1 bg-border" />
-            </div>
-
-            <form onSubmit={onSubmitManual} className="flex gap-2">
-              <div className="relative flex-1">
-                <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                <Input
-                  type="email"
-                  placeholder="you@example.com"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="pl-9"
-                  disabled={submitting}
-                />
-              </div>
               <Button
                 type="submit"
-                disabled={submitting || !email.trim()}
-                className="bg-emerald-500 text-white hover:bg-emerald-600"
+                disabled={submitting}
+                className="w-full bg-emerald-500 text-white hover:bg-emerald-600"
               >
                 {submitting ? (
                   <Loader2 className="size-4 animate-spin" />
+                ) : mode === "signup" ? (
+                  <LogIn className="size-4" />
                 ) : (
                   <LogIn className="size-4" />
                 )}
-                Sign in
+                {mode === "signup" ? "Create account" : "Sign in"}
               </Button>
             </form>
+
+            {/* Demo account quick-fill */}
+            <div className="mt-5 border-t border-border/60 pt-4">
+              <button
+                type="button"
+                onClick={() => setShowDemo((s) => !s)}
+                className="text-xs text-muted-foreground transition hover:text-foreground"
+              >
+                {showDemo ? "− Hide" : "+ Show"} demo accounts
+              </button>
+              <AnimatePresence>
+                {showDemo && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Demo password for all accounts: <code className="rounded bg-muted px-1 py-0.5 font-mono">demo123</code>
+                    </p>
+                    <div className="mt-2 grid grid-cols-1 gap-1.5">
+                      {DEMO_EMAILS.map((d) => (
+                        <button
+                          key={d.email}
+                          type="button"
+                          onClick={() => fillDemo(d.email)}
+                          className="flex items-center justify-between rounded-md border border-border/50 bg-background/40 px-3 py-1.5 text-left text-xs transition hover:border-emerald-500/40 hover:bg-emerald-500/5"
+                        >
+                          <span className="font-medium">{d.name}</span>
+                          <span className="text-muted-foreground">{d.email}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </CardContent>
         </Card>
 
@@ -226,3 +287,33 @@ export function LoginScreen() {
     </div>
   );
 }
+
+// Small helper components ----------------------------------------------------
+
+function FieldShell({
+  label,
+  error,
+  children,
+}: {
+  label: string;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div>
+      <label className="mb-1 block text-xs font-medium text-muted-foreground">
+        {label}
+      </label>
+      {children}
+      {error && <p className="mt-1 text-xs text-destructive">{error}</p>}
+    </div>
+  );
+}
+
+const DEMO_EMAILS = [
+  { name: "Aarav Sharma", email: "aarav@kanban.ai" },
+  { name: "Priya Nair", email: "priya@kanban.ai" },
+  { name: "Rohan Mehta", email: "rohan@kanban.ai" },
+  { name: "Ananya Iyer", email: "ananya@kanban.ai" },
+  { name: "Vikram Reddy", email: "vikram@kanban.ai" },
+];

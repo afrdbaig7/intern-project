@@ -66,7 +66,12 @@ button. Insights **stream to the UI one at a time** as each module completes.
 ### Bonus
 - **Board templates**: Software Sprint, Content Calendar, Product Roadmap (pre-built columns,
   labels, sample cards).
-- **Dependency mapping**: cards can be linked as blockers (schema-ready).
+- **Dependency mapping**: cards can be linked as blockers of other cards. The card modal shows
+  "Blocked by" / "Blocking" lists with an "Add blocker" picker. The AI bottleneck detector
+  accounts for dependency chains and flags cards blocking ≥2 downstream tasks.
+- **Time tracking**: a start/stop timer on each card modal. Logged time is cached on the card
+  (`timeLoggedSec`) and shown on the board; recent entries are expandable. The AI complexity
+  inference can use logged time alongside completion patterns.
 - **Live cursor sharing** across board viewers.
 
 ---
@@ -274,8 +279,10 @@ bun run socket                 # start the Socket.IO service (port 3003)
 bun run dev                    # start Next.js (port 3000) — in another terminal
 ```
 
-Open `http://localhost:3000`. Log in by clicking any seeded user (password-free for the demo):
-- aarav@kanban.ai, priya@kanban.ai, rohan@kanban.ai, ananya@kanban.ai, vikram@kanban.ai
+Open `http://localhost:3000`. The login screen has **Sign In** and **Create account** tabs:
+- **New users**: switch to "Create account", enter name + email + password (≥6 chars) → a personal board is created from the Software Sprint template and you're logged in.
+- **Demo accounts** (password `demo123`): aarav@kanban.ai, priya@kanban.ai, rohan@kanban.ai, ananya@kanban.ai, vikram@kanban.ai — expand "Show demo accounts" on the login screen to one-click fill.
+- Passwords are bcrypt-hashed (10 rounds); sessions use an httpOnly `kb_user` cookie (7 days).
 
 ### Chrome extension
 1. Open `chrome://extensions` → enable **Developer mode**.

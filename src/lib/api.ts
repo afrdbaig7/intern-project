@@ -5,6 +5,8 @@ import type {
   BoardDTO,
   BoardDetailDTO,
   CardDTO,
+  CardDependenciesDTO,
+  CardTimeStateDTO,
   CommentDTO,
   ActivityDTO,
   TeamMemberStats,
@@ -53,10 +55,15 @@ async function request<T>(
 
 export const api = {
   // auth
-  login: (email: string) =>
+  login: (email: string, password: string) =>
     request<{ user: UserDTO }>("/api/auth/login", {
       method: "POST",
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ email, password }),
+    }),
+  signup: (name: string, email: string, password: string) =>
+    request<{ user: UserDTO }>("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ name, email, password }),
     }),
   logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
   me: () => request<{ user: UserDTO | null }>("/api/auth/me"),
@@ -89,6 +96,34 @@ export const api = {
     request<CardDTO>(`/api/cards/${id}`, { method: "PATCH", body: JSON.stringify(data) }),
   cardComments: (id: string) => request<CommentDTO[]>(`/api/cards/${id}/comments`),
   cardActivity: (id: string) => request<ActivityDTO[]>(`/api/cards/${id}/activity`),
+
+  // card dependencies (bonus)
+  cardDependencies: (id: string) =>
+    request<CardDependenciesDTO>(`/api/cards/${id}/dependencies`),
+  addBlocker: (id: string, blockerId: string) =>
+    request<CardDependenciesDTO>(`/api/cards/${id}/dependencies`, {
+      method: "POST",
+      body: JSON.stringify({ blockerId }),
+    }),
+  removeBlocker: (id: string, blockerId: string) =>
+    request<CardDependenciesDTO>(`/api/cards/${id}/dependencies`, {
+      method: "DELETE",
+      body: JSON.stringify({ blockerId }),
+    }),
+
+  // card time tracking (bonus)
+  cardTime: (id: string) =>
+    request<CardTimeStateDTO>(`/api/cards/${id}/time`),
+  startTimer: (id: string, userId: string) =>
+    request<CardTimeStateDTO>(`/api/cards/${id}/time`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    }),
+  stopTimer: (id: string, userId: string) =>
+    request<CardTimeStateDTO>(`/api/cards/${id}/time`, {
+      method: "PATCH",
+      body: JSON.stringify({ userId }),
+    }),
 
   // clip (chrome extension also uses this)
   clip: (data: { title: string; description?: string; sourceUrl?: string; boardId: string; columnId: string; creatorId?: string }) =>

@@ -55,5 +55,7 @@ export const qk = {
   card: (id: string) => ["card", id] as const,
   cardComments: (id: string) => ["card", id, "comments"] as const,
   cardActivity: (id: string) => ["card", id, "activity"] as const,
+  cardDependencies: (id: string) => ["card", id, "deps"] as const,
+  cardTime: (id: string) => ["card", id, "time"] as const,
   users: ["users"] as const,
 };

@@ -1,9 +1,15 @@
 // Bottleneck detection — pure heuristic, no external LLM.
 //
-// A column is a "bottleneck" when, over the last 7 days, cards arrive but
-// don't leave: arrived >= 3 AND arrived/left > 2.5. We then attribute a
-// likely cause by inspecting the cards currently sitting in the column
-// (overloaded assignee, stuck label, or generic accumulation).
+// Two complementary signals are emitted:
+//   1. COLUMN bottlenecks — a column where cards arrive but don't leave
+//      (arrived >= 3 AND arrived/left > 2.5 over the last 7 days).
+//   2. DEPENDENCY bottlenecks (bonus) — a single card that is NOT in a done
+//      column but is blocking ≥ 2 downstream tasks. Severity escalates:
+//      2-3 blocked => warning, ≥ 4 blocked => critical. Completing the card
+//      would unblock the chain.
+//
+// Both are returned to the caller as BottleneckResult[] so they can be
+// persisted as AIInsight rows with type "bottleneck".
 
 import { PrismaClient } from "@prisma/client";
 import type { BottleneckResult } from "../types";
@@ -13,6 +19,10 @@ const LOOKBACK_DAYS = 7;
 const MIN_ARRIVED = 3;
 const RATIO_THRESHOLD = 2.5;
 const CRITICAL_RATIO = 4;
+
+// Dependency bottleneck thresholds (bonus).
+const DEP_WARNING_THRESHOLD = 2; // blocks >= 2 → warning
+const DEP_CRITICAL_THRESHOLD = 4; // blocks >= 4 → critical
 
 /** Safely parse a metadata JSON string into a plain object. */
 function parseMeta(raw: string | null): Record<string, unknown> {
@@ -132,6 +142,7 @@ export async function detectBottlenecks(
     }
 
     results.push({
+      kind: "column",
       columnId: col.id,
       columnName: col.name,
       arrived: s.arrived,
@@ -140,6 +151,66 @@ export async function detectBottlenecks(
       likelyCause,
       severity: ratio > CRITICAL_RATIO ? "critical" : "warning",
     });
+  }
+
+  // ── Dependency-chain bottlenecks (bonus) ──────────────────────────
+  // For every non-done card, count how many downstream cards it blocks.
+  // Cards blocking ≥ 2 others are surfaced as bottleneck insights so the
+  // team can prioritise unblocking the chain.
+  try {
+    const doneColIds = new Set(
+      columns.filter((c) => c.isDone).map((c) => c.id),
+    );
+
+    // Load every dependency edge on this board (filter via the blocker's
+    // boardId so we don't pull edges from other boards).
+    const edges = await db.cardDependency.findMany({
+      where: { blocker: { boardId } },
+      select: { blockerId: true, blockedId: true },
+    });
+
+    // blockerId → count of cards it blocks
+    const blockingCount = new Map<string, number>();
+    for (const e of edges) {
+      blockingCount.set(e.blockerId, (blockingCount.get(e.blockerId) ?? 0) + 1);
+    }
+    if (blockingCount.size === 0) {
+      return results.sort((a, b) => b.ratio - a.ratio);
+    }
+
+    // Build a quick lookup so we can resolve columnId/title per blocker.
+    const cardById = new Map(cards.map((c) => [c.id, c]));
+
+    for (const [blockerId, count] of blockingCount) {
+      if (count < DEP_WARNING_THRESHOLD) continue;
+      const blocker = cardById.get(blockerId);
+      if (!blocker) continue;
+      // Skip cards already in a done column.
+      if (doneColIds.has(blocker.columnId)) continue;
+
+      const blockerCol = columns.find((c) => c.id === blocker.columnId);
+      const colName = blockerCol?.name ?? "Unknown";
+      const severity: "warning" | "critical" =
+        count >= DEP_CRITICAL_THRESHOLD ? "critical" : "warning";
+
+      results.push({
+        kind: "dependency",
+        columnId: blocker.columnId,
+        columnName: colName,
+        cardId: blocker.id,
+        cardTitle: blocker.title,
+        // Reuse the arrived/left fields to convey downstream impact. `arrived`
+        // = downstream cards blocked; `left` = 0 (they can't proceed until
+        // this one is done). `ratio` = arrived/left → ∞, capped to `count`.
+        arrived: count,
+        left: 0,
+        ratio: count,
+        likelyCause: `Card "${blocker.title}" is blocking ${count} downstream tasks. Completing it would unblock the chain.`,
+        severity,
+      });
+    }
+  } catch (depErr) {
+    console.error("[ai] dependency bottleneck detection failed:", depErr);
   }
 
   return results.sort((a, b) => b.ratio - a.ratio);

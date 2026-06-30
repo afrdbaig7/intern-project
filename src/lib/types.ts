@@ -52,9 +52,36 @@ export interface CardDTO {
   assignee: UserDTO | null
   creator: UserDTO | null
   labels: LabelDTO[]
+  // Time tracking (bonus): cached total logged seconds + active timer marker.
+  timeLoggedSec: number
+  timerStartedAt: string | null
   createdAt: string
   updatedAt: string
   completedAt: string | null
+}
+
+// ─── Dependency Mapping (bonus) ─────────────────────────────────
+export interface CardDependenciesDTO {
+  blockers: CardDTO[] // cards that block this card
+  blocked: CardDTO[] // cards this card is blocking
+}
+
+// ─── Time Tracking (bonus) ──────────────────────────────────────
+export interface TimeEntryDTO {
+  id: string
+  cardId: string
+  userId: string
+  userName: string
+  startedAt: string
+  endedAt: string | null
+  durationSec: number | null
+}
+
+export interface CardTimeStateDTO {
+  totalSec: number
+  running: boolean
+  startedAt: string | null
+  entries: TimeEntryDTO[]
 }
 
 export interface CommentDTO {
@@ -257,8 +284,14 @@ export interface ConflictNotification {
 
 // ─── AI Engine Types ─────────────────────────────────────────────
 export interface BottleneckResult {
+  /** "column" = column-accumulation bottleneck, "dependency" = single-card chain root. */
+  kind?: "column" | "dependency";
   columnId: string
   columnName: string
+  /** For dependency bottlenecks: the blocker card's id (for the AI insight metadata). */
+  cardId?: string
+  /** For dependency bottlenecks: the blocker card's title. */
+  cardTitle?: string
   arrived: number
   left: number
   ratio: number

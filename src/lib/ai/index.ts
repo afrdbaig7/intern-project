@@ -105,15 +105,22 @@ export async function runAIAnalysis(
   try {
     const bottlenecks: BottleneckResult[] = await detectBottlenecks(db, boardId);
     for (const b of bottlenecks) {
+      const isDep = b.kind === "dependency";
+      const title = isDep
+        ? `Dependency bottleneck: ${b.cardTitle ?? "card"}`
+        : `Bottleneck in ${b.columnName}`;
+      const message = isDep
+        ? `This card is blocking ${b.arrived} downstream tasks. Completing it would unblock the chain.`
+        : `${b.columnName} is accumulating cards: ${b.arrived} arrived, ${b.left} left (ratio ${b.ratio.toFixed(
+            1
+          )}x). ${b.likelyCause}.`;
       const created = await db.aIInsight.create({
         data: {
           boardId,
           type: "bottleneck",
           severity: b.severity,
-          title: `Bottleneck in ${b.columnName}`,
-          message: `${b.columnName} is accumulating cards: ${b.arrived} arrived, ${b.left} left (ratio ${b.ratio.toFixed(
-            1
-          )}x). ${b.likelyCause}.`,
+          title,
+          message,
           metadata: JSON.stringify(b),
         },
       });

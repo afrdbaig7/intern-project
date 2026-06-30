@@ -26,6 +26,7 @@ model User {
   createdCards     Card[]        @relation("CardCreator")
   comments         Comment[]
   activities       Activity[]
+  timeEntries      TimeEntry[]
 }
 
 model BoardMember {
@@ -100,6 +101,10 @@ model Card {
   assigneeId String?
   creatorId  String?
 
+  // Time tracking (bonus): cached total seconds logged + active timer marker.
+  timeLoggedSec   Int       @default(0)
+  timerStartedAt  DateTime?
+
   board   Board   @relation(fields: [boardId], references: [id], onDelete: Cascade)
   column  Column  @relation(fields: [columnId], references: [id], onDelete: Cascade)
   assignee User?  @relation("CardAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
@@ -109,6 +114,7 @@ model Card {
   comments    Comment[]
   activities  Activity[]
   history     CardHistory[]
+  timeEntries TimeEntry[]
   dependenciesAsBlocker CardDependency[] @relation("BlockerCard")
   dependenciesAsBlocked CardDependency[] @relation("BlockedCard")
 
@@ -186,6 +192,23 @@ model CardDependency {
   blocked Card @relation("BlockedCard", fields: [blockedId], references: [id], onDelete: Cascade)
 
   @@unique([blockerId, blockedId])
+}
+
+// ─── Time Tracking (bonus) ───────────────────────────────────────
+model TimeEntry {
+  id          String    @id @default(cuid())
+  cardId      String
+  userId      String
+  startedAt   DateTime
+  endedAt     DateTime?
+  durationSec Int?
+  createdAt   DateTime  @default(now())
+
+  card Card @relation(fields: [cardId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([cardId])
+  @@index([userId])
 }
 
 // ─── AI ──────────────────────────────────────────────────────────

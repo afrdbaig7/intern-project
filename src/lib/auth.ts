@@ -1,13 +1,37 @@
 // Simple cookie-based auth. No NextAuth — just a `kb_user=<userId>` httpOnly
-// cookie that we read on every request.
+// cookie that we read on every request. Passwords are hashed with bcrypt.
 
 import type { NextRequest } from "next/server";
+import bcrypt from "bcryptjs";
 import { db } from "./db";
 import { toUserDTO } from "./mappers";
 import type { UserDTO } from "./types";
 
 export const AUTH_COOKIE = "kb_user";
 export const AUTH_COOKIE_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+
+const BCRYPT_ROUNDS = 10;
+
+/** Hash a plaintext password with bcrypt. */
+export function hashPassword(plain: string): string {
+  return bcrypt.hashSync(plain, BCRYPT_ROUNDS);
+}
+
+/** Verify a plaintext password against a stored bcrypt hash. */
+export function verifyPassword(plain: string, hash: string): boolean {
+  // Guard against legacy / empty hashes.
+  if (!hash || !hash.startsWith("$2")) return false;
+  try {
+    return bcrypt.compareSync(plain, hash);
+  } catch {
+    return false;
+  }
+}
+
+/** Basic email format check. */
+export function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
 
 /**
  * Reads the `kb_user` cookie from the request and loads the matching user.

@@ -255,6 +255,10 @@ function toCardDTO(card: Card & {
       name: l.label.name,
       color: l.label.color,
     })),
+    timeLoggedSec: (card as Card & { timeLoggedSec?: number }).timeLoggedSec ?? 0,
+    timerStartedAt: (card as Card & { timerStartedAt?: Date | null }).timerStartedAt
+      ? new Date((card as Card & { timerStartedAt?: Date | null }).timerStartedAt as Date).toISOString()
+      : null,
     createdAt: new Date(card.createdAt).toISOString(),
     updatedAt: new Date(card.updatedAt).toISOString(),
     completedAt: card.completedAt ? new Date(card.completedAt).toISOString() : null,

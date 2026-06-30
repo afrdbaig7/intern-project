@@ -53,3 +53,7 @@ prompt
 server.log
 # Skills directory
 /skills/
+# Stray tool output / scratch files
+/tool-results/
+/scripts/test-*
+/agent-ctx/
