@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Clip to Kanban AI</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="header">
+        <div class="brand">
+          <div class="logo" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none">
+              <path
+                d="M8 5v14M8 12l7-7M8 12l7 7"
+                stroke="currentColor"
+                stroke-width="2.5"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+              />
+            </svg>
+          </div>
+          <div class="brand-text">
+            <div class="brand-title">Clip to Board</div>
+            <div class="brand-sub">Kanban AI</div>
+          </div>
+        </div>
+        <button
+          id="settingsToggle"
+          class="icon-btn"
+          title="Settings"
+          aria-label="Settings"
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3" />
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+          </svg>
+        </button>
+      </header>
+
+      <section id="settings" class="settings hidden">
+        <label class="field">
+          <span class="label">Kanban app URL</span>
+          <input
+            id="appBase"
+            type="url"
+            placeholder="http://localhost:3000"
+            spellcheck="false"
+            autocomplete="off"
+          />
+          <span class="hint">Where your Kanban AI app is running. Saved locally.</span>
+        </label>
+      </section>
+
+      <form id="clipForm" class="form" novalidate>
+        <label class="field">
+          <span class="label">Title <span class="req">*</span></span>
+          <input
+            id="title"
+            type="text"
+            placeholder="What needs to get done?"
+            required
+            autocomplete="off"
+          />
+        </label>
+
+        <label class="field">
+          <span class="label">Description</span>
+          <textarea
+            id="description"
+            rows="4"
+            placeholder="Paste or write the details — selected text shows up here automatically."
+          ></textarea>
+        </label>
+
+        <label class="field">
+          <span class="label">Source URL</span>
+          <input
+            id="sourceUrl"
+            type="url"
+            placeholder="https://"
+            spellcheck="false"
+            autocomplete="off"
+          />
+        </label>
+
+        <div class="row">
+          <label class="field">
+            <span class="label">Board</span>
+            <select id="boardId">
+              <option value="">Loading…</option>
+            </select>
+          </label>
+          <label class="field">
+            <span class="label">Column</span>
+            <select id="columnId">
+              <option value="">Pick a board first</option>
+            </select>
+          </label>
+        </div>
+
+        <label class="field">
+          <span class="label">Clip as</span>
+          <select id="creatorId">
+            <option value="">Loading team…</option>
+          </select>
+        </label>
+
+        <div class="actions">
+          <button id="cancelBtn" type="button" class="btn btn-ghost">Cancel</button>
+          <button id="submitBtn" type="submit" class="btn btn-primary">
+            <span class="btn-label">Create task</span>
+            <span class="spinner hidden"></span>
+          </button>
+        </div>
+      </form>
+
+      <div id="status" class="status hidden" role="status" aria-live="polite"></div>
+
+      <footer class="footer">
+        <span id="sourceLabel">No page captured yet.</span>
+      </footer>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
